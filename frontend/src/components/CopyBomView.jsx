@@ -140,16 +140,16 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
       <div className="fiori-view-body">
         {/* Error Notice */}
         {errorMessage && (
-          <div className="sap-alert sap-alert-error" style={{ maxWidth: 760, width: '100%', marginBottom: 14 }}>
+          <div className="sap-alert sap-alert-error" style={{ maxWidth: 680, width: '100%', margin: '0 auto 14px' }}>
             <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
             <div>{errorMessage}</div>
           </div>
         )}
         {/* Step 1: Form View (when no proposal is pending and not yet confirmed) */}
         {!proposedAction && !executionResult && (
-          <div className="sap-form-view-section">
+          <div className="sap-form-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
             {isSubmitting ? (
-              <div className="sap-loading-card">
+              <div className="sap-loading-card" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
                 <span className="sap-spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
                 <h4>Validating with SAP via RFC...</h4>
                 <p>Checking source BOM in MAST/STAS/STPO and determining target alternative.</p>
@@ -160,6 +160,7 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
                 onCancel={onBack}
                 initialValues={lastSubmittedForm || {}}
                 hideHeader={true}
+                style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}
               />
             )}
           </div>
@@ -167,7 +168,7 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
 
         {/* Step 2: Confirmation Proposal Gate */}
         {proposedAction && !executionResult && (
-          <div className="sap-proposal-view-section">
+          <div className="sap-proposal-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
             <div className="sap-proposal-header-card">
               <ShieldCheck size={20} color="#0070f2" />
               <div>
@@ -187,7 +188,7 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
 
         {/* Step 3: Success Execution Result Card */}
         {executionResult && (
-          <div className="sap-result-view-section">
+          <div className="sap-result-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
             <div className="sap-result-success-card">
               <div className="sap-result-success-header">
                 <div className="sap-result-success-icon">

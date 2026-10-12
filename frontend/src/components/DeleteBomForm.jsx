@@ -55,7 +55,7 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {}, 
   };
 
   return (
-    <div className="sap-structured-form-card delete-card" style={{ maxWidth: 540, width: '100%', marginBottom: 16, ...style }}>
+    <div className="sap-structured-form-card delete-card" style={{ maxWidth: 680, width: '100%', margin: '0 auto', marginBottom: 16, ...style }}>
       {!hideHeader && (
         <div className="sap-form-header">
           <div className="sap-form-header-title">

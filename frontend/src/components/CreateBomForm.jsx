@@ -171,7 +171,7 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {}, 
   };
 
   return (
-    <div className="sap-structured-form-card" style={{ maxWidth: 720, width: '100%', ...style }}>
+    <div className="sap-structured-form-card" style={{ maxWidth: 680, width: '100%', margin: '0 auto', ...style }}>
       {!hideHeader && (
         <div className="sap-form-header">
           <div className="sap-form-header-title">

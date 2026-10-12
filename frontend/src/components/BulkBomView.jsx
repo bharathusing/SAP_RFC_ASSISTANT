@@ -391,7 +391,7 @@ export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome 
 
       <div className="fiori-view-body wide">
         {/* Workflow Steps Indicator */}
-        <div className="sap-bulk-steps-bar" style={{ maxWidth: parsedRows.length === 0 ? 680 : '100%', borderRadius: 8, border: '1px solid var(--sap-border)', marginBottom: 14 }}>
+        <div className="sap-bulk-steps-bar" style={{ maxWidth: parsedRows.length === 0 ? 680 : 1100, width: '100%', margin: '0 auto 14px', borderRadius: 8, border: '1px solid var(--sap-border)' }}>
           <div className={`sap-bulk-step ${activeStep >= 1 ? 'active' : ''}`}>
             <span className="step-num">1</span>
             <span>Upload File</span>
@@ -410,14 +410,14 @@ export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome 
 
         {/* Error Notification */}
         {parseError && (
-          <div className="sap-form-alert sap-form-alert-error" style={{ maxWidth: parsedRows.length === 0 ? 680 : '100%', marginBottom: 14 }}>
+          <div className="sap-form-alert sap-form-alert-error" style={{ maxWidth: parsedRows.length === 0 ? 680 : 1100, width: '100%', margin: '0 auto 14px' }}>
             <AlertTriangle size={14} style={{ flexShrink: 0 }} />
             <span>{parseError}</span>
           </div>
         )}
 
         {/* Main Content Workspace Card */}
-        <div className="sap-structured-form-card" style={{ maxWidth: parsedRows.length === 0 ? 680 : '100%', width: '100%', padding: 0, overflow: 'hidden' }}>
+        <div className="sap-structured-form-card" style={{ maxWidth: parsedRows.length === 0 ? 680 : 1100, width: '100%', margin: '0 auto', padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px' }}>
           {parsedRows.length === 0 ? (
             <div className="sap-dropzone-container">

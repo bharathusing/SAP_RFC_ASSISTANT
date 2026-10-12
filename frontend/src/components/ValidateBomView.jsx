@@ -101,14 +101,14 @@ export default function ValidateBomView({ systemKey = 'DEV', onBack, onNavigateH
       <div className="fiori-view-body">
         {/* Error Notice */}
         {errorMsg && (
-          <div className="sap-alert sap-alert-error" style={{ maxWidth: 540, width: '100%', marginBottom: 14 }}>
+          <div className="sap-alert sap-alert-error" style={{ maxWidth: 680, width: '100%', margin: '0 auto 14px' }}>
             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
             <div>{errorMsg}</div>
           </div>
         )}
 
         {/* Small Compact Validation Card (2 rows x 2 columns) */}
-        <div className="sap-structured-form-card" style={{ maxWidth: 540, width: '100%', marginBottom: 16 }}>
+        <div className="sap-structured-form-card" style={{ maxWidth: 680, width: '100%', margin: '0 auto 16px' }}>
           <form onSubmit={handleValidate}>
             <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: '14px 16px', gap: '10px 14px' }}>
               <div className="sap-form-group">
@@ -209,8 +209,9 @@ export default function ValidateBomView({ systemKey = 'DEV', onBack, onNavigateH
         {result && result.success && (
           <div
             style={{
-              maxWidth: 540,
+              maxWidth: 680,
               width: '100%',
+              margin: '0 auto',
               padding: '12px 14px',
               borderRadius: '8px',
               backgroundColor: result.bomExists ? '#f0fdf4' : '#fffbeb',

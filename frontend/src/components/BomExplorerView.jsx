@@ -119,14 +119,14 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
       <div className="fiori-view-body wide">
         {/* Error Notice */}
         {errorMessage && (
-          <div className="sap-alert sap-alert-error" style={{ maxWidth: 540, width: '100%', marginBottom: 14 }}>
+          <div className="sap-alert sap-alert-error" style={{ maxWidth: 680, width: '100%', margin: '0 auto 14px' }}>
             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
             <div>{errorMessage}</div>
           </div>
         )}
 
         {/* Small Compact Search Card (2 rows x 2 columns) */}
-        <div className="sap-structured-form-card" style={{ maxWidth: 540, width: '100%', marginBottom: 16 }}>
+        <div className="sap-structured-form-card" style={{ maxWidth: 680, width: '100%', margin: '0 auto 16px' }}>
           <form onSubmit={handleSearch}>
             <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: '14px 16px', gap: '10px 14px' }}>
             <div className="sap-form-group">
@@ -239,7 +239,7 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
 
       {/* BOM Data View */}
       {bomData && (
-        <div className="sap-bom-explorer-results">
+        <div className="sap-bom-explorer-results" style={{ width: '100%', maxWidth: 1100, margin: '0 auto' }}>
           {/* Header Metadata Card */}
           <div className="sap-result-meta-grid" style={{ marginBottom: 16 }}>
             <div className="sap-result-meta-item">

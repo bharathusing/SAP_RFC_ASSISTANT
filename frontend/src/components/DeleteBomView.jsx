@@ -133,7 +133,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHom
       <div className="fiori-view-body">
         {/* Error Notice */}
         {errorMessage && (
-          <div className="sap-alert sap-alert-error" style={{ maxWidth: 540, width: '100%', marginBottom: 14 }}>
+          <div className="sap-alert sap-alert-error" style={{ maxWidth: 680, width: '100%', margin: '0 auto 14px' }}>
             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
             <div>{errorMessage}</div>
           </div>
@@ -141,9 +141,9 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHom
 
         {/* Step 1: Form View */}
         {!proposedAction && !executionResult && (
-          <div className="sap-form-view-section" style={{ maxWidth: 540, width: '100%' }}>
+          <div className="sap-form-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
             {isSubmitting ? (
-              <div className="sap-loading-card" style={{ maxWidth: 540 }}>
+              <div className="sap-loading-card" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
                 <span className="sap-spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
                 <h4>Verifying BOM Existence in SAP...</h4>
                 <p>Checking material and plant records prior to deletion proposal.</p>
@@ -154,6 +154,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHom
                 onCancel={onBack}
                 initialValues={lastSubmittedForm || {}}
                 hideHeader={true}
+                style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}
               />
             )}
           </div>
@@ -161,7 +162,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHom
 
         {/* Step 2: Confirmation Proposal Gate */}
         {proposedAction && !executionResult && (
-          <div className="sap-proposal-view-section" style={{ maxWidth: 540, width: '100%' }}>
+          <div className="sap-proposal-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
             <div className="sap-proposal-header-card danger">
               <ShieldCheck size={20} color="#bb0000" />
               <div>
@@ -181,7 +182,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHom
 
         {/* Step 3: Success Execution Result Card */}
         {executionResult && (
-          <div className="sap-result-view-section" style={{ maxWidth: 540, width: '100%' }}>
+          <div className="sap-result-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
             <div className="sap-result-success-card">
               <div className="sap-result-success-header">
                 <div className="sap-result-success-icon">
