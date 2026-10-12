@@ -55,20 +55,20 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {} }
   };
 
   return (
-    <div className="sap-structured-form-card delete-card">
+    <div className="sap-structured-form-card delete-card" style={{ maxWidth: 640, width: '100%', marginBottom: 16 }}>
       <div className="sap-form-header">
         <div className="sap-form-header-title">
           <div className="sap-form-header-icon delete-icon">
             <Trash2 size={18} />
           </div>
           <div>
-            <h4>Delete Bill of Materials (RFC / BAPI)</h4>
-            <p>Specify the exact BOM identifiers for permanent deletion.</p>
+            <h4>Delete Material BOM (CS02)</h4>
+            <p>Safely archive or delete specific BOM alternatives in SAP without GUI popups. Strict human confirmation gates prevent accidental data loss.</p>
           </div>
         </div>
       </div>
 
-      <div className="sap-form-alert sap-form-alert-warning">
+      <div className="sap-form-alert sap-form-alert-warning" style={{ margin: '0 14px 12px' }}>
         <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
         <div>
           <strong>Destructive Operation:</strong> Deleting a BOM removes all component linkages in the specified plant. A safety confirmation check will be required prior to execution.
@@ -76,14 +76,14 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {} }
       </div>
 
       {validationError && (
-        <div className="sap-form-alert sap-form-alert-error">
+        <div className="sap-form-alert sap-form-alert-error" style={{ margin: '0 14px 12px' }}>
           <AlertTriangle size={16} style={{ flexShrink: 0 }} />
           <span>{validationError}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
-        <div className="sap-form-grid">
+        <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: '12px 14px', gap: '10px 14px' }}>
           <div className="sap-form-group">
             <label htmlFor="delMaterial">
               Material <span className="required-star">*</span>
@@ -158,17 +158,19 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {} }
             type="button"
             className="sap-btn sap-btn-secondary"
             onClick={onCancel}
+            style={{ height: 28, fontSize: '11.5px', padding: '0 12px' }}
           >
-            <X size={15} />
+            <X size={13} />
             <span>Cancel</span>
           </button>
 
           <button
             type="submit"
             className="sap-btn sap-btn-danger"
+            style={{ height: 28, fontSize: '11.5px', padding: '0 12px' }}
           >
             <span>Proceed</span>
-            <ArrowRight size={15} />
+            <ArrowRight size={13} />
           </button>
         </div>
       </form>

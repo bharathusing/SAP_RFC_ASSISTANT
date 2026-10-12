@@ -1,7 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LogOut, User, Menu, X, ChevronDown, AlertTriangle } from 'lucide-react';
+import {
+  LogOut,
+  User,
+  Menu,
+  X,
+  ChevronDown,
+  AlertTriangle,
+  LayoutGrid,
+  Copy,
+  FileSpreadsheet,
+  Trash2,
+  Search,
+  MessageSquareCode
+} from 'lucide-react';
 import Login from './components/Login';
 import ChatBox from './components/ChatBox';
+import FioriLaunchpad from './components/FioriLaunchpad';
+import CopyBomView from './components/CopyBomView';
+import DeleteBomView from './components/DeleteBomView';
+import BomExplorerView from './components/BomExplorerView';
+import BulkBomView from './components/BulkBomView';
+import ValidateBomView from './components/ValidateBomView';
 import { checkSession, logoutUser, getAuthConfig, getSapSessionStatus, getSapSessions, selectSapSession } from './services/api';
 import nextItPointLogo from './assets/next_it_point_logo.png';
 
@@ -11,6 +30,10 @@ export default function App() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentSystem, setCurrentSystem] = useState('DEV'); // 'DEV' | 'QA' | 'PROD'
+  const [activeTab, setActiveTab] = useState('launchpad'); // 'launchpad' | 'copy_bom' | 'delete_bom' | 'bom_explorer' | 'ai_assistant'
+  const [launchpadSubView, setLaunchpadSubView] = useState('home'); // 'home' | 'bom_operations'
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isValidateModalOpen, setIsValidateModalOpen] = useState(false);
   const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState(false);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
   const sessionDropdownRef = useRef(null);
@@ -410,6 +433,71 @@ export default function App() {
               </div>
             </div>
 
+            {/* Mobile Navigation Tabs */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>Applications:</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                <button
+                  type="button"
+                  className={`sap-btn sap-btn-secondary ${activeTab === 'launchpad' ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab('launchpad');
+                    setLaunchpadSubView('home');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  style={{ fontSize: '12px', padding: '6px' }}
+                >
+                  <LayoutGrid size={14} />
+                  <span>Launchpad</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sap-btn sap-btn-secondary ${activeTab === 'copy_bom' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('copy_bom'); setIsMobileMenuOpen(false); }}
+                  style={{ fontSize: '12px', padding: '6px' }}
+                >
+                  <Copy size={14} />
+                  <span>Copy BOM</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sap-btn sap-btn-secondary ${activeTab === 'bulk_bom' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('bulk_bom'); setIsMobileMenuOpen(false); }}
+                  style={{ fontSize: '12px', padding: '6px' }}
+                >
+                  <FileSpreadsheet size={14} />
+                  <span>Bulk Copy</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sap-btn sap-btn-secondary ${activeTab === 'delete_bom' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('delete_bom'); setIsMobileMenuOpen(false); }}
+                  style={{ fontSize: '12px', padding: '6px' }}
+                >
+                  <Trash2 size={14} />
+                  <span>Delete BOM</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sap-btn sap-btn-secondary ${activeTab === 'bom_explorer' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('bom_explorer'); setIsMobileMenuOpen(false); }}
+                  style={{ fontSize: '12px', padding: '6px' }}
+                >
+                  <Search size={14} />
+                  <span>Explorer</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sap-btn sap-btn-secondary ${activeTab === 'validate_bom' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('validate_bom'); setIsMobileMenuOpen(false); }}
+                  style={{ fontSize: '12px', padding: '6px' }}
+                >
+                  <ShieldCheck size={14} />
+                  <span>Validate BOM</span>
+                </button>
+              </div>
+            </div>
+
             <button
               type="button"
               className="sap-btn sap-btn-secondary sap-mobile-action-btn"
@@ -426,14 +514,67 @@ export default function App() {
         )}
       </header>
 
-      {/* Main Assistant View */}
+      {/* Main SAP Fiori Workspace Layout */}
       <main className="sap-assistant-layout">
-        <div className="sap-assistant-container">
-          <ChatBox
-            isActive={true}
+        {activeTab === 'launchpad' && (
+          <FioriLaunchpad
+            sapSession={sapSession}
             systemKey={currentSystem}
+            subView={launchpadSubView}
+            onSubViewChange={setLaunchpadSubView}
+            onOpenAction={(action) => setActiveTab(action)}
           />
-        </div>
+        )}
+
+        {activeTab === 'copy_bom' && (
+          <CopyBomView
+            systemKey={currentSystem}
+            onBack={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('bom_operations');
+            }}
+          />
+        )}
+
+        {activeTab === 'bulk_bom' && (
+          <BulkBomView
+            systemKey={currentSystem}
+            onBack={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('bom_operations');
+            }}
+          />
+        )}
+
+        {activeTab === 'delete_bom' && (
+          <DeleteBomView
+            systemKey={currentSystem}
+            onBack={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('bom_operations');
+            }}
+          />
+        )}
+
+        {activeTab === 'bom_explorer' && (
+          <BomExplorerView
+            systemKey={currentSystem}
+            onBack={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('bom_operations');
+            }}
+          />
+        )}
+
+        {activeTab === 'validate_bom' && (
+          <ValidateBomView
+            systemKey={currentSystem}
+            onBack={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('bom_operations');
+            }}
+          />
+        )}
       </main>
     </div>
   );

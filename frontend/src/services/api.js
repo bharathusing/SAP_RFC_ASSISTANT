@@ -237,6 +237,24 @@ export async function selectSapSession(sessionId) {
   return response.data;
 }
 
+/**
+ * Reads a BOM header and components via SAP RFC CSAP_MAT_BOM_READ.
+ * @param {object} params { material, plant, bomUsage, alternativeBom }
+ */
+export async function readBom(params) {
+  const response = await apiClient.post('/bom/read', params);
+  return response.data;
+}
+
+/**
+ * Explodes and returns full multi-level BOM hierarchy.
+ * @param {object} params { material, plant, bomUsage, alternativeBom }
+ */
+export async function explodeBomHierarchy(params) {
+  const response = await apiClient.post('/bom/hierarchy', params);
+  return response.data;
+}
+
 export default apiClient;
 
 

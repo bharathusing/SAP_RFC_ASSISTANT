@@ -7,11 +7,22 @@ frontend/node_modules/
 .env
 .env*
 *.env*
+.env.*
 backend/.env
 backend/.env*
 backend/*.env*
+frontend/.env
+frontend/.env*
+frontend/*.env*
+*.pem
+*.key
+*.cert
+*.pfx
+*.pkcs12
+*credentials*
 !*.env.example
 !backend/.env.example
+!frontend/.env.example
 
 # Production build artifacts
 dist/
@@ -19,8 +30,11 @@ build/
 frontend/dist/
 frontend/build/
 
-# Logs
+# Logs & SAP RFC Traces
 *.log
+*.trc
+dev_rfc.log
+dev_rfc.trc
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -30,6 +44,7 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+.kilo/
 
 # Scratch & temporary investigation files
 scratch/

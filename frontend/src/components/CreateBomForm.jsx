@@ -178,8 +178,8 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {} }
             <Copy size={18} />
           </div>
           <div>
-            <h4>Create Bill of Materials (Copy-From)</h4>
-            <p>Specify and validate the reference source BOM before creating the new target BOM.</p>
+            <h4>Copy Material BOM (CS01)</h4>
+            <p>CS01 Reference BOM Copy with automatic Alternative BOM generation (Rule 1) and recursive multi-level sub-assembly replication (Rule 2).</p>
           </div>
         </div>
       </div>
@@ -271,7 +271,7 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {} }
             </div>
 
             {/* Validation Action Button */}
-            <div className="sap-val-action-row" style={{ marginTop: '12px', marginBottom: '8px' }}>
+            <div className="sap-val-action-row" style={{ marginTop: '6px', marginBottom: '4px' }}>
               <button
                 type="button"
                 onClick={handleValidateSource}
@@ -280,11 +280,12 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {} }
                 style={{
                   width: '100%',
                   justifyContent: 'center',
-                  gap: '8px',
-                  padding: '8px 12px',
-                  fontSize: '12.5px',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  height: '26px',
+                  fontSize: '11px',
                   fontWeight: 600,
-                  borderRadius: '6px',
+                  borderRadius: '4px',
                   cursor: isValidating ? 'wait' : 'pointer'
                 }}
               >
@@ -507,8 +508,9 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {} }
             type="button"
             className="sap-btn sap-btn-secondary"
             onClick={onCancel}
+            style={{ height: 28, fontSize: '11.5px', padding: '0 12px' }}
           >
-            <X size={15} />
+            <X size={13} />
             <span>Cancel</span>
           </button>
 
@@ -516,9 +518,10 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {} }
             type="submit"
             className="sap-btn sap-btn-primary"
             title="Proceed to Copy BOM proposal"
+            style={{ height: 28, fontSize: '11.5px', padding: '0 12px' }}
           >
             <span>Proceed</span>
-            <ArrowRight size={15} />
+            <ArrowRight size={13} />
           </button>
         </div>
       </form>

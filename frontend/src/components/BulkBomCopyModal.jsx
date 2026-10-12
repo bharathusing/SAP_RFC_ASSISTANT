@@ -386,7 +386,7 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
         <div className="sap-bulk-modal-header">
           <div className="sap-bulk-modal-title">
             <div className="sap-bulk-icon-badge">
-              <FileSpreadsheet size={22} color="#0070f2" />
+              <FileSpreadsheet size={16} color="#0070f2" />
             </div>
             <div>
               <h3>Bulk BOM Copy via Excel</h3>
@@ -399,7 +399,7 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
             onClick={handleClose}
             title="Close dialog"
           >
-            <X size={18} />
+            <X size={15} />
           </button>
         </div>
 
@@ -409,12 +409,12 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
             <span className="step-num">1</span>
             <span>Upload File</span>
           </div>
-          <div className="step-arrow"><ArrowRight size={14} /></div>
+          <div className="step-arrow"><ArrowRight size={12} /></div>
           <div className={`sap-bulk-step ${activeStep >= 2 ? 'active' : ''}`}>
             <span className="step-num">2</span>
             <span>SAP Pre-flight Validation</span>
           </div>
-          <div className="step-arrow"><ArrowRight size={14} /></div>
+          <div className="step-arrow"><ArrowRight size={12} /></div>
           <div className={`sap-bulk-step ${activeStep >= 3 ? 'active' : ''}`}>
             <span className="step-num">3</span>
             <span>Sequential Execution</span>
@@ -423,8 +423,8 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
 
         {/* Error Notification */}
         {parseError && (
-          <div className="sap-form-alert sap-form-alert-error" style={{ margin: '12px 24px 0' }}>
-            <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+          <div className="sap-form-alert sap-form-alert-error" style={{ margin: '8px 16px 0' }}>
+            <AlertTriangle size={14} style={{ flexShrink: 0 }} />
             <span>{parseError}</span>
           </div>
         )}
@@ -453,32 +453,34 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
                   }}
                 />
                 <div className="dropzone-icon">
-                  <Upload size={36} color="#0070f2" />
+                  <Upload size={22} color="#0070f2" />
                 </div>
                 <h4>Drag & drop Excel or CSV file here</h4>
                 <p>Supports .xlsx, .xls, and .csv with Source & Target BOM columns</p>
-                <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button
                     type="button"
                     className="sap-btn sap-btn-primary"
+                    style={{ height: 28, fontSize: '11px', padding: '0 10px' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       fileInputRef.current?.click();
                     }}
                   >
-                    <Upload size={14} />
+                    <Upload size={13} />
                     <span>Browse Files</span>
                   </button>
                   <button
                     type="button"
                     className="sap-btn sap-btn-secondary"
+                    style={{ height: 28, fontSize: '11px', padding: '0 10px' }}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDownloadTemplate();
                     }}
                   >
-                    <Download size={14} />
-                    <span>Download Excel Template</span>
+                    <Download size={13} />
+                    <span>Download Template</span>
                   </button>
                 </div>
               </div>
