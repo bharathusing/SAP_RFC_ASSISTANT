@@ -128,7 +128,6 @@ export default function FioriLaunchpad({
               <span className="fiori-bc-current">Home</span>
             </div>
             <h1 className="fiori-ph-title">My Home</h1>
-            <p className="fiori-ph-subtitle">Fiori launchpad · SAP RFC toolkit</p>
           </div>
 
           <div className="fiori-body">
