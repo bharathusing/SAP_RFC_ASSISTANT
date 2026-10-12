@@ -128,7 +128,7 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
             title="Back to Bill of Materials"
             aria-label="Back to Bill of Materials"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={16} />
           </button>
           <h1 className="fiori-ph-title">Copy Material BOM (CS01)</h1>
         </div>

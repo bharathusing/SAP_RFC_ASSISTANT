@@ -3604,19 +3604,19 @@ input, select {
 /* Page Header */
 .fiori-ph {
   background: #ffffff;
-  padding: 16px 32px 14px;
+  padding: 12px 32px 10px;
   border-bottom: 1px solid #d9d9d9;
   flex-shrink: 0;
 }
 
 .fiori-bc {
-  font-size: 12px;
+  font-size: 11px;
   color: #6a6d70;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .fiori-bc-link {
@@ -3625,7 +3625,7 @@ input, select {
   background: none;
   border: none;
   padding: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-family: inherit;
   font-weight: 500;
   display: inline-flex;
@@ -3638,29 +3638,29 @@ input, select {
 
 .fiori-bc-sep {
   color: #6a6d70;
-  font-size: 12px;
+  font-size: 11px;
   user-select: none;
 }
 
 .fiori-bc-current {
   color: #32363a;
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .fiori-ph-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .fiori-ph-back {
   background: #ffffff;
   border: 1px solid #d9d9d9;
-  border-radius: 6px;
+  border-radius: 4px;
   color: #0a6ed1;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -3676,16 +3676,18 @@ input, select {
 
 .fiori-ph-title {
   margin: 0;
-  font-size: 24px;
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
   color: #32363a;
   letter-spacing: -0.01em;
+  line-height: 1.25;
 }
 
 .fiori-ph-subtitle {
-  margin: 3px 0 0;
+  margin: 2px 0 0;
   color: #6a6d70;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 /* Page Body */

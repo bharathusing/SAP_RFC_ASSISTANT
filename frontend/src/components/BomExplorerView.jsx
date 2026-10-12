@@ -107,7 +107,7 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
             title="Back to Bill of Materials"
             aria-label="Back to Bill of Materials"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={16} />
           </button>
           <h1 className="fiori-ph-title">BOM Hierarchy Explorer (CS03)</h1>
         </div>

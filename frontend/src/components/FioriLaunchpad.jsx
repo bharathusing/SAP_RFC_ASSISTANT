@@ -192,7 +192,7 @@ export default function FioriLaunchpad({
                 title="Back to Home"
                 aria-label="Back to Home"
               >
-                <ChevronLeft size={18} />
+                <ChevronLeft size={16} />
               </button>
               <h1 className="fiori-ph-title">Bill of Materials</h1>
             </div>

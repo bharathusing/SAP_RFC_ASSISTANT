@@ -121,7 +121,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHom
             title="Back to Bill of Materials"
             aria-label="Back to Bill of Materials"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={16} />
           </button>
           <h1 className="fiori-ph-title">Delete Material BOM (CS02)</h1>
         </div>

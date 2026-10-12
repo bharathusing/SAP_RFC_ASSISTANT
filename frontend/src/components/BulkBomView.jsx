@@ -380,7 +380,7 @@ export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome 
             title="Back to Bill of Materials"
             aria-label="Back to Bill of Materials"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={16} />
           </button>
           <h1 className="fiori-ph-title">Bulk Copy BOM via Excel (BATCH)</h1>
         </div>
