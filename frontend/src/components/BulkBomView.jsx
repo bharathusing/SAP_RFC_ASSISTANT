@@ -12,7 +12,8 @@ import {
   ArrowRight,
   ShieldCheck,
   FileCheck,
-  ArrowLeft
+  ArrowLeft,
+  ChevronLeft
 } from 'lucide-react';
 import { batchValidateBoms, batchCopyBoms, downloadBomTemplate } from '../services/api';
 
@@ -70,7 +71,7 @@ function normalizeRowKeys(rawRow) {
   return normalized;
 }
 
-export default function BulkBomView({ systemKey = 'DEV', onBack }) {
+export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome }) {
   const [file, setFile] = useState(null);
   const [parsedRows, setParsedRows] = useState([]);
   const [parseError, setParseError] = useState('');
@@ -356,64 +357,67 @@ export default function BulkBomView({ systemKey = 'DEV', onBack }) {
   const errorCount = parsedRows.filter((r) => r.status === 'ERROR' || r.status === 'FAILED').length;
 
   return (
-    <div className="sap-fiori-view-container wide">
-      {/* Top Breadcrumb & Navigation Bar */}
-      <div className="sap-fiori-view-nav">
-        <button
-          type="button"
-          className="sap-btn sap-btn-ghost sap-back-btn"
-          onClick={onBack}
-          title="Return to Bill of Materials"
-        >
-          <ArrowLeft size={13} />
-          <span>Bill of Materials</span>
-        </button>
-        <span className="sap-view-divider">/</span>
-        <span className="sap-view-current">Bulk Copy BOM via Excel (BATCH)</span>
-        <span className="sap-view-system-pill">{systemKey}</span>
+    <div className="fiori-app-view-root">
+      {/* Full-Width SAP Fiori Horizon Page Header */}
+      <div className="fiori-ph">
+        <div className="fiori-bc">
+          <button type="button" className="fiori-bc-link" onClick={onNavigateHome || onBack}>
+            Home
+          </button>
+          <span className="fiori-bc-sep">›</span>
+          <button type="button" className="fiori-bc-link" onClick={onBack}>
+            Bill of Materials
+          </button>
+          <span className="fiori-bc-sep">›</span>
+          <span className="fiori-bc-current">Bulk Copy BOM via Excel</span>
+          <span className="sap-view-system-pill" style={{ marginLeft: 6 }}>{systemKey}</span>
+        </div>
+        <div className="fiori-ph-title-row">
+          <button
+            type="button"
+            className="fiori-ph-back"
+            onClick={onBack}
+            title="Back to Bill of Materials"
+            aria-label="Back to Bill of Materials"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <h1 className="fiori-ph-title">Bulk Copy BOM via Excel (BATCH)</h1>
+        </div>
+        <p className="fiori-ph-subtitle">
+          Mass upload spreadsheet (.xlsx, .csv) to validate and duplicate multiple BOMs across plants sequentially via SAP RFC.
+        </p>
       </div>
 
-      {/* View Header */}
-      <div className="sap-fiori-view-header">
-        <div className="sap-fiori-view-icon-badge" style={{ backgroundColor: '#f0fdf4', color: '#107e3e' }}>
-          <FileSpreadsheet size={18} />
+      <div className="fiori-view-body wide">
+        {/* Workflow Steps Indicator */}
+        <div className="sap-bulk-steps-bar" style={{ maxWidth: parsedRows.length === 0 ? 680 : '100%', borderRadius: 8, border: '1px solid var(--sap-border)', marginBottom: 14 }}>
+          <div className={`sap-bulk-step ${activeStep >= 1 ? 'active' : ''}`}>
+            <span className="step-num">1</span>
+            <span>Upload File</span>
+          </div>
+          <div className="step-arrow"><ArrowRight size={12} /></div>
+          <div className={`sap-bulk-step ${activeStep >= 2 ? 'active' : ''}`}>
+            <span className="step-num">2</span>
+            <span>SAP Pre-flight Validation</span>
+          </div>
+          <div className="step-arrow"><ArrowRight size={12} /></div>
+          <div className={`sap-bulk-step ${activeStep >= 3 ? 'active' : ''}`}>
+            <span className="step-num">3</span>
+            <span>Sequential Execution</span>
+          </div>
         </div>
-        <div>
-          <h1 className="sap-fiori-view-title">Bulk BOM Copy via Excel</h1>
-          <p className="sap-fiori-view-subtitle">
-            Mass upload spreadsheet (.xlsx, .csv) to validate and duplicate multiple BOMs across plants sequentially via SAP RFC.
-          </p>
-        </div>
-      </div>
 
-      {/* Workflow Steps Indicator */}
-      <div className="sap-bulk-steps-bar" style={{ borderRadius: 8, border: '1px solid var(--sap-border)' }}>
-        <div className={`sap-bulk-step ${activeStep >= 1 ? 'active' : ''}`}>
-          <span className="step-num">1</span>
-          <span>Upload File</span>
-        </div>
-        <div className="step-arrow"><ArrowRight size={12} /></div>
-        <div className={`sap-bulk-step ${activeStep >= 2 ? 'active' : ''}`}>
-          <span className="step-num">2</span>
-          <span>SAP Pre-flight Validation</span>
-        </div>
-        <div className="step-arrow"><ArrowRight size={12} /></div>
-        <div className={`sap-bulk-step ${activeStep >= 3 ? 'active' : ''}`}>
-          <span className="step-num">3</span>
-          <span>Sequential Execution</span>
-        </div>
-      </div>
+        {/* Error Notification */}
+        {parseError && (
+          <div className="sap-form-alert sap-form-alert-error" style={{ maxWidth: parsedRows.length === 0 ? 680 : '100%', marginBottom: 14 }}>
+            <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+            <span>{parseError}</span>
+          </div>
+        )}
 
-      {/* Error Notification */}
-      {parseError && (
-        <div className="sap-form-alert sap-form-alert-error">
-          <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-          <span>{parseError}</span>
-        </div>
-      )}
-
-      {/* Main Content Workspace Card */}
-      <div className="sap-structured-form-card" style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Main Content Workspace Card */}
+        <div className="sap-structured-form-card" style={{ maxWidth: parsedRows.length === 0 ? 680 : '100%', width: '100%', padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px' }}>
           {parsedRows.length === 0 ? (
             <div className="sap-dropzone-container">
@@ -698,5 +702,6 @@ export default function BulkBomView({ systemKey = 'DEV', onBack }) {
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }

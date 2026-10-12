@@ -533,6 +533,10 @@ export default function App() {
               setActiveTab('launchpad');
               setLaunchpadSubView('bom_operations');
             }}
+            onNavigateHome={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('home');
+            }}
           />
         )}
 
@@ -542,6 +546,10 @@ export default function App() {
             onBack={() => {
               setActiveTab('launchpad');
               setLaunchpadSubView('bom_operations');
+            }}
+            onNavigateHome={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('home');
             }}
           />
         )}
@@ -553,6 +561,10 @@ export default function App() {
               setActiveTab('launchpad');
               setLaunchpadSubView('bom_operations');
             }}
+            onNavigateHome={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('home');
+            }}
           />
         )}
 
@@ -563,6 +575,10 @@ export default function App() {
               setActiveTab('launchpad');
               setLaunchpadSubView('bom_operations');
             }}
+            onNavigateHome={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('home');
+            }}
           />
         )}
 
@@ -572,6 +588,10 @@ export default function App() {
             onBack={() => {
               setActiveTab('launchpad');
               setLaunchpadSubView('bom_operations');
+            }}
+            onNavigateHome={() => {
+              setActiveTab('launchpad');
+              setLaunchpadSubView('home');
             }}
           />
         )}

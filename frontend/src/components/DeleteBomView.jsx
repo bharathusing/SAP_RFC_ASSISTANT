@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import {
-  ArrowLeft,
   Trash2,
   CheckCircle2,
   AlertTriangle,
   ShieldCheck,
-  RefreshCw
+  ChevronLeft,
+  ArrowLeft
 } from 'lucide-react';
 import DeleteBomForm from './DeleteBomForm';
 import ConfirmationCard from './ConfirmationCard';
 import { sendChatMessage, confirmChatAction, cancelChatAction } from '../services/api';
 
-export default function DeleteBomView({ systemKey = 'DEV', onBack }) {
+export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHome }) {
   const [proposedAction, setProposedAction] = useState(null);
   const [actionStatus, setActionStatus] = useState('pending');
   const [executionResult, setExecutionResult] = useState(null);
@@ -98,38 +98,52 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack }) {
   };
 
   return (
-    <div className="sap-fiori-view-container">
-      {/* Top Breadcrumb & Navigation Bar */}
-      <div className="sap-fiori-view-nav">
-        <button
-          type="button"
-          className="sap-btn sap-btn-ghost sap-back-btn"
-          onClick={onBack}
-          title="Return to Bill of Materials"
-        >
-          <ArrowLeft size={13} />
-          <span>Bill of Materials</span>
-        </button>
-        <span className="sap-view-divider">/</span>
-        <span className="sap-view-current">Delete Material BOM (CS02)</span>
-        <span className="sap-view-system-pill">{systemKey}</span>
+    <div className="fiori-app-view-root">
+      {/* Full-Width SAP Fiori Horizon Page Header */}
+      <div className="fiori-ph">
+        <div className="fiori-bc">
+          <button type="button" className="fiori-bc-link" onClick={onNavigateHome || onBack}>
+            Home
+          </button>
+          <span className="fiori-bc-sep">›</span>
+          <button type="button" className="fiori-bc-link" onClick={onBack}>
+            Bill of Materials
+          </button>
+          <span className="fiori-bc-sep">›</span>
+          <span className="fiori-bc-current">Delete Material BOM</span>
+          <span className="sap-view-system-pill" style={{ marginLeft: 6 }}>{systemKey}</span>
+        </div>
+        <div className="fiori-ph-title-row">
+          <button
+            type="button"
+            className="fiori-ph-back"
+            onClick={onBack}
+            title="Back to Bill of Materials"
+            aria-label="Back to Bill of Materials"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <h1 className="fiori-ph-title">Delete Material BOM (CS02)</h1>
+        </div>
+        <p className="fiori-ph-subtitle">
+          Safely archive or delete specific BOM alternatives in SAP without GUI popups. Strict human confirmation gates prevent accidental data loss.
+        </p>
       </div>
 
-      {/* Error Notice */}
-      {errorMessage && (
-        <div className="sap-alert sap-alert-error" style={{ marginBottom: 16 }}>
-          <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div>{errorMessage}</div>
-        </div>
-      )}
+      <div className="fiori-view-body">
+        {/* Error Notice */}
+        {errorMessage && (
+          <div className="sap-alert sap-alert-error" style={{ maxWidth: 540, width: '100%', marginBottom: 14 }}>
+            <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>{errorMessage}</div>
+          </div>
+        )}
 
-      {/* Main Workspace Body */}
-      <div className="sap-fiori-view-body">
         {/* Step 1: Form View */}
         {!proposedAction && !executionResult && (
-          <div className="sap-form-view-section">
+          <div className="sap-form-view-section" style={{ maxWidth: 540, width: '100%' }}>
             {isSubmitting ? (
-              <div className="sap-loading-card">
+              <div className="sap-loading-card" style={{ maxWidth: 540 }}>
                 <span className="sap-spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
                 <h4>Verifying BOM Existence in SAP...</h4>
                 <p>Checking material and plant records prior to deletion proposal.</p>
@@ -139,6 +153,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack }) {
                 onSubmit={handleFormSubmit}
                 onCancel={onBack}
                 initialValues={lastSubmittedForm || {}}
+                hideHeader={true}
               />
             )}
           </div>
@@ -146,7 +161,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack }) {
 
         {/* Step 2: Confirmation Proposal Gate */}
         {proposedAction && !executionResult && (
-          <div className="sap-proposal-view-section">
+          <div className="sap-proposal-view-section" style={{ maxWidth: 540, width: '100%' }}>
             <div className="sap-proposal-header-card danger">
               <ShieldCheck size={20} color="#bb0000" />
               <div>
@@ -166,7 +181,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack }) {
 
         {/* Step 3: Success Execution Result Card */}
         {executionResult && (
-          <div className="sap-result-view-section">
+          <div className="sap-result-view-section" style={{ maxWidth: 540, width: '100%' }}>
             <div className="sap-result-success-card">
               <div className="sap-result-success-header">
                 <div className="sap-result-success-icon">
@@ -208,16 +223,18 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack }) {
                   type="button"
                   className="sap-btn sap-btn-secondary"
                   onClick={onBack}
+                  style={{ height: 28, fontSize: '11px', padding: '0 12px' }}
                 >
-                  <ArrowLeft size={15} />
+                  <ArrowLeft size={13} />
                   <span>Return to Launchpad</span>
                 </button>
                 <button
                   type="button"
                   className="sap-btn sap-btn-primary"
                   onClick={handleReset}
+                  style={{ height: 28, fontSize: '11px', padding: '0 12px' }}
                 >
-                  <Trash2 size={15} />
+                  <Trash2 size={13} />
                   <span>Delete Another BOM</span>
                 </button>
               </div>

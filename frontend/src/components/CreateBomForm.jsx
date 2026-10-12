@@ -21,7 +21,7 @@ function getTodayFormatted() {
   return `${pad(today.getDate())}.${pad(today.getMonth() + 1)}.${today.getFullYear()}`;
 }
 
-export default function CreateBomForm({ onSubmit, onCancel, initialValues = {} }) {
+export default function CreateBomForm({ onSubmit, onCancel, initialValues = {}, hideHeader = false, style = {} }) {
   const [formData, setFormData] = useState({
     sourceMaterial: initialValues.sourceMaterial || initialValues.material || '',
     sourcePlant: initialValues.sourcePlant || '',
@@ -171,18 +171,20 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {} }
   };
 
   return (
-    <div className="sap-structured-form-card">
-      <div className="sap-form-header">
-        <div className="sap-form-header-title">
-          <div className="sap-form-header-icon copy-icon">
-            <Copy size={18} />
-          </div>
-          <div>
-            <h4>Copy Material BOM (CS01)</h4>
-            <p>CS01 Reference BOM Copy with automatic Alternative BOM generation (Rule 1) and recursive multi-level sub-assembly replication (Rule 2).</p>
+    <div className="sap-structured-form-card" style={{ maxWidth: 720, width: '100%', ...style }}>
+      {!hideHeader && (
+        <div className="sap-form-header">
+          <div className="sap-form-header-title">
+            <div className="sap-form-header-icon copy-icon">
+              <Copy size={18} />
+            </div>
+            <div>
+              <h4>Copy Material BOM (CS01)</h4>
+              <p>CS01 Reference BOM Copy with automatic Alternative BOM generation (Rule 1) and recursive multi-level sub-assembly replication (Rule 2).</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {validationError && (
         <div className="sap-form-alert sap-form-alert-error">

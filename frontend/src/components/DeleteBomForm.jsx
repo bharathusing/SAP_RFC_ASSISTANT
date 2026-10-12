@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Trash2, AlertTriangle, ArrowRight, X, Layers, Factory, Hash } from 'lucide-react';
 
-export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {} }) {
+export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {}, hideHeader = false, style = {} }) {
   const [formData, setFormData] = useState({
     material: initialValues.material || '',
     plant: initialValues.plant || '',
@@ -55,41 +55,43 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {} }
   };
 
   return (
-    <div className="sap-structured-form-card delete-card" style={{ maxWidth: 640, width: '100%', marginBottom: 16 }}>
-      <div className="sap-form-header">
-        <div className="sap-form-header-title">
-          <div className="sap-form-header-icon delete-icon">
-            <Trash2 size={18} />
-          </div>
-          <div>
-            <h4>Delete Material BOM (CS02)</h4>
-            <p>Safely archive or delete specific BOM alternatives in SAP without GUI popups. Strict human confirmation gates prevent accidental data loss.</p>
+    <div className="sap-structured-form-card delete-card" style={{ maxWidth: 540, width: '100%', marginBottom: 16, ...style }}>
+      {!hideHeader && (
+        <div className="sap-form-header">
+          <div className="sap-form-header-title">
+            <div className="sap-form-header-icon delete-icon">
+              <Trash2 size={18} />
+            </div>
+            <div>
+              <h4>Delete Material BOM (CS02)</h4>
+              <p>Safely archive or delete specific BOM alternatives in SAP without GUI popups. Strict human confirmation gates prevent accidental data loss.</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="sap-form-alert sap-form-alert-warning" style={{ margin: '0 14px 12px' }}>
-        <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+      <div className="sap-form-alert sap-form-alert-warning" style={{ margin: hideHeader ? '4px 0 12px' : '0 14px 12px' }}>
+        <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
         <div>
-          <strong>Destructive Operation:</strong> Deleting a BOM removes all component linkages in the specified plant. A safety confirmation check will be required prior to execution.
+          <strong>Destructive Operation:</strong> Deleting a BOM removes component linkages in the specified plant. A safety confirmation check is required prior to execution.
         </div>
       </div>
 
       {validationError && (
-        <div className="sap-form-alert sap-form-alert-error" style={{ margin: '0 14px 12px' }}>
-          <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+        <div className="sap-form-alert sap-form-alert-error" style={{ margin: hideHeader ? '0 0 12px' : '0 14px 12px' }}>
+          <AlertTriangle size={15} style={{ flexShrink: 0 }} />
           <span>{validationError}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
-        <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: '12px 14px', gap: '10px 14px' }}>
+        <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: hideHeader ? '4px 2px 10px' : '12px 14px', gap: '10px 14px' }}>
           <div className="sap-form-group">
-            <label htmlFor="delMaterial">
-              Material <span className="required-star">*</span>
+            <label htmlFor="delMaterial" style={{ fontSize: '11px', marginBottom: 2 }}>
+              Material Number <span className="required-star" style={{ color: '#ef4444' }}>*</span>
             </label>
             <div className="sap-form-input-wrapper">
-              <Layers size={14} className="input-icon" />
+              <Layers size={13} className="input-icon" />
               <input
                 id="delMaterial"
                 type="text"
@@ -97,16 +99,17 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {} }
                 value={formData.material}
                 onChange={(e) => handleChange('material', e.target.value)}
                 className={`sap-form-input ${fieldErrors.material ? 'input-error' : ''}`}
+                autoFocus
               />
             </div>
           </div>
 
           <div className="sap-form-group">
-            <label htmlFor="delPlant">
-              Plant <span className="required-star">*</span>
+            <label htmlFor="delPlant" style={{ fontSize: '11px', marginBottom: 2 }}>
+              Plant Code <span className="required-star" style={{ color: '#ef4444' }}>*</span>
             </label>
             <div className="sap-form-input-wrapper">
-              <Factory size={14} className="input-icon" />
+              <Factory size={13} className="input-icon" />
               <input
                 id="delPlant"
                 type="text"
@@ -119,15 +122,15 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {} }
           </div>
 
           <div className="sap-form-group">
-            <label htmlFor="delAlternativeBom">
-              Alternative BOM <span className="required-star">*</span>
+            <label htmlFor="delAlternativeBom" style={{ fontSize: '11px', marginBottom: 2 }}>
+              Alternative BOM <span className="required-star" style={{ color: '#ef4444' }}>*</span>
             </label>
             <div className="sap-form-input-wrapper">
-              <Hash size={14} className="input-icon" />
+              <Hash size={13} className="input-icon" />
               <input
                 id="delAlternativeBom"
                 type="text"
-                placeholder="e.g. 2"
+                placeholder="e.g. 1"
                 value={formData.alternativeBom}
                 onChange={(e) => handleChange('alternativeBom', e.target.value)}
                 className={`sap-form-input ${fieldErrors.alternativeBom ? 'input-error' : ''}`}
@@ -136,11 +139,11 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {} }
           </div>
 
           <div className="sap-form-group">
-            <label htmlFor="delBomUsage">
-              BOM Usage <span className="required-star">*</span>
+            <label htmlFor="delBomUsage" style={{ fontSize: '11px', marginBottom: 2 }}>
+              BOM Usage <span className="required-star" style={{ color: '#ef4444' }}>*</span>
             </label>
             <div className="sap-form-input-wrapper">
-              <Hash size={14} className="input-icon" />
+              <Hash size={13} className="input-icon" />
               <input
                 id="delBomUsage"
                 type="text"
@@ -153,24 +156,24 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {} }
           </div>
         </div>
 
-        <div className="sap-form-actions">
+        <div className="sap-form-actions" style={{ padding: '8px 4px 6px', borderTop: '1px solid #fee2e2' }}>
           <button
             type="button"
             className="sap-btn sap-btn-secondary"
             onClick={onCancel}
-            style={{ height: 28, fontSize: '11.5px', padding: '0 12px' }}
+            style={{ height: 28, fontSize: '11px', padding: '0 12px' }}
           >
-            <X size={13} />
+            <X size={12} />
             <span>Cancel</span>
           </button>
 
           <button
             type="submit"
             className="sap-btn sap-btn-danger"
-            style={{ height: 28, fontSize: '11.5px', padding: '0 12px' }}
+            style={{ height: 28, fontSize: '11px', padding: '0 14px' }}
           >
             <span>Proceed</span>
-            <ArrowRight size={13} />
+            <ArrowRight size={12} />
           </button>
         </div>
       </form>

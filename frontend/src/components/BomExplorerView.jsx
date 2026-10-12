@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
+  ChevronLeft,
   Search,
   Layers,
   Factory,
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react';
 import { readBom, explodeBomHierarchy } from '../services/api';
 
-export default function BomExplorerView({ systemKey = 'DEV', onBack }) {
+export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateHome }) {
   const [searchParams, setSearchParams] = useState({
     material: '',
     plant: '',
@@ -83,47 +84,51 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack }) {
   });
 
   return (
-    <div className="sap-fiori-view-container wide">
-      {/* Top Breadcrumb & Navigation Bar */}
-      <div className="sap-fiori-view-nav">
-        <button
-          type="button"
-          className="sap-btn sap-btn-ghost sap-back-btn"
-          onClick={onBack}
-          title="Return to Bill of Materials"
-        >
-          <ArrowLeft size={13} />
-          <span>Bill of Materials</span>
-        </button>
-        <span className="sap-view-divider">/</span>
-        <span className="sap-view-current">BOM Hierarchy Explorer (CS03)</span>
-        <span className="sap-view-system-pill">{systemKey}</span>
+    <div className="fiori-app-view-root">
+      {/* Full-width Fiori Horizon Header (Identical to Homepage / Operations Header) */}
+      <div className="fiori-ph">
+        <div className="fiori-bc">
+          <button type="button" className="fiori-bc-link" onClick={onNavigateHome || onBack}>
+            Home
+          </button>
+          <span className="fiori-bc-sep">›</span>
+          <button type="button" className="fiori-bc-link" onClick={onBack}>
+            Bill of Materials
+          </button>
+          <span className="fiori-bc-sep">›</span>
+          <span className="fiori-bc-current">BOM Hierarchy Explorer</span>
+          <span className="sap-view-system-pill" style={{ marginLeft: 6 }}>{systemKey}</span>
+        </div>
+        <div className="fiori-ph-title-row">
+          <button
+            type="button"
+            className="fiori-ph-back"
+            onClick={onBack}
+            title="Back to Bill of Materials"
+            aria-label="Back to Bill of Materials"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <h1 className="fiori-ph-title">BOM Hierarchy Explorer (CS03)</h1>
+        </div>
+        <p className="fiori-ph-subtitle">
+          Inspect live Material BOM headers and component structures directly from SAP tables (MAST / STAS / STPO) via CSAP_MAT_BOM_READ.
+        </p>
       </div>
 
-      {/* Search Input Card (Single Unified Half-Width Card with 2x2 grid) */}
-      <div className="sap-structured-form-card" style={{ maxWidth: 640, width: '100%', marginBottom: 16 }}>
-        <div className="sap-form-header">
-          <div className="sap-form-header-title">
-            <div className="sap-form-header-icon explorer-icon" style={{ backgroundColor: '#eff6ff', color: '#0070f2' }}>
-              <Search size={18} />
-            </div>
-            <div>
-              <h4>BOM Hierarchy Explorer (CS03)</h4>
-              <p>Inspect live Material BOM headers and component structures directly from SAP tables (MAST / STAS / STPO) via CSAP_MAT_BOM_READ.</p>
-            </div>
-          </div>
-        </div>
-
+      <div className="fiori-view-body wide">
         {/* Error Notice */}
         {errorMessage && (
-          <div className="sap-alert sap-alert-error" style={{ margin: '0 14px 12px' }}>
+          <div className="sap-alert sap-alert-error" style={{ maxWidth: 540, width: '100%', marginBottom: 14 }}>
             <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
             <div>{errorMessage}</div>
           </div>
         )}
 
-        <form onSubmit={handleSearch}>
-          <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: '12px 14px', gap: '10px 14px' }}>
+        {/* Small Compact Search Card (2 rows x 2 columns) */}
+        <div className="sap-structured-form-card" style={{ maxWidth: 540, width: '100%', marginBottom: 16 }}>
+          <form onSubmit={handleSearch}>
+            <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: '14px 16px', gap: '10px 14px' }}>
             <div className="sap-form-group">
               <label className="sap-form-label" style={{ fontSize: '11px', marginBottom: 2 }}>
                 Material Number <span className="sap-required-star" style={{ color: '#ef4444' }}>*</span>
@@ -334,6 +339,7 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

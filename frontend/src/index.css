@@ -3569,13 +3569,27 @@ input, select {
    SAP FIORI HORIZON LAUNCHPAD - DUAL-LEVEL HIERARCHY & TILES (IMAGE 1 & 2)
    ============================================================================ */
 
-.fiori-launchpad-root {
+.fiori-launchpad-root,
+.fiori-app-view-root {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   background: #f5f6f7;
   width: 100%;
+}
+
+.fiori-view-body {
+  padding: 20px 32px 48px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.fiori-view-body.wide {
+  align-items: stretch;
 }
 
 /* Page Header */

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
+  ChevronLeft,
   Copy,
   CheckCircle2,
   AlertTriangle,
@@ -15,7 +16,7 @@ import CreateBomForm from './CreateBomForm';
 import ConfirmationCard from './ConfirmationCard';
 import { sendChatMessage, confirmChatAction, cancelChatAction } from '../services/api';
 
-export default function CopyBomView({ systemKey = 'DEV', onBack }) {
+export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome }) {
   const [proposedAction, setProposedAction] = useState(null);
   const [actionStatus, setActionStatus] = useState('pending'); // 'pending' | 'executing' | 'confirmed' | 'cancelled' | 'failed'
   const [executionResult, setExecutionResult] = useState(null);
@@ -104,33 +105,46 @@ export default function CopyBomView({ systemKey = 'DEV', onBack }) {
   };
 
   return (
-    <div className="sap-fiori-view-container">
-      {/* Top Breadcrumb & Navigation Bar */}
-      <div className="sap-fiori-view-nav">
-        <button
-          type="button"
-          className="sap-btn sap-btn-ghost sap-back-btn"
-          onClick={onBack}
-          title="Return to Bill of Materials"
-        >
-          <ArrowLeft size={13} />
-          <span>Bill of Materials</span>
-        </button>
-        <span className="sap-view-divider">/</span>
-        <span className="sap-view-current">Copy Material BOM (CS01)</span>
-        <span className="sap-view-system-pill">{systemKey}</span>
+    <div className="fiori-app-view-root">
+      {/* Full-width Fiori Horizon Header (Identical to Homepage / Operations Header) */}
+      <div className="fiori-ph">
+        <div className="fiori-bc">
+          <button type="button" className="fiori-bc-link" onClick={onNavigateHome || onBack}>
+            Home
+          </button>
+          <span className="fiori-bc-sep">›</span>
+          <button type="button" className="fiori-bc-link" onClick={onBack}>
+            Bill of Materials
+          </button>
+          <span className="fiori-bc-sep">›</span>
+          <span className="fiori-bc-current">Copy Material BOM</span>
+          <span className="sap-view-system-pill" style={{ marginLeft: 6 }}>{systemKey}</span>
+        </div>
+        <div className="fiori-ph-title-row">
+          <button
+            type="button"
+            className="fiori-ph-back"
+            onClick={onBack}
+            title="Back to Bill of Materials"
+            aria-label="Back to Bill of Materials"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <h1 className="fiori-ph-title">Copy Material BOM (CS01)</h1>
+        </div>
+        <p className="fiori-ph-subtitle">
+          CS01 Reference BOM Copy with automatic Alternative BOM generation (Rule 1) and recursive multi-level sub-assembly replication (Rule 2).
+        </p>
       </div>
 
-      {/* Error Notice */}
-      {errorMessage && (
-        <div className="sap-alert sap-alert-error" style={{ marginBottom: 16 }}>
-          <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div>{errorMessage}</div>
-        </div>
-      )}
-
-      {/* Main Workspace Body */}
-      <div className="sap-fiori-view-body">
+      <div className="fiori-view-body">
+        {/* Error Notice */}
+        {errorMessage && (
+          <div className="sap-alert sap-alert-error" style={{ maxWidth: 760, width: '100%', marginBottom: 14 }}>
+            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div>{errorMessage}</div>
+          </div>
+        )}
         {/* Step 1: Form View (when no proposal is pending and not yet confirmed) */}
         {!proposedAction && !executionResult && (
           <div className="sap-form-view-section">
@@ -145,6 +159,7 @@ export default function CopyBomView({ systemKey = 'DEV', onBack }) {
                 onSubmit={handleFormSubmit}
                 onCancel={onBack}
                 initialValues={lastSubmittedForm || {}}
+                hideHeader={true}
               />
             )}
           </div>
