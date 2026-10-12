@@ -124,9 +124,6 @@ export default function FioriLaunchpad({
         /* ================= LEVEL 1: MY HOME ================= */
         <>
           <div className="fiori-ph">
-            <div className="fiori-bc">
-              <span className="fiori-bc-current">Home</span>
-            </div>
             <h1 className="fiori-ph-title">My Home</h1>
           </div>
 
