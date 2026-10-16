@@ -1,26 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Layers,
   Wrench,
   TrendingUp,
   Package,
+  ShoppingCart,
   Search,
+  Eye,
+  Copy,
+  FileSpreadsheet,
+  ShieldCheck,
+  Trash2,
+  ChevronLeft,
+  AlertCircle
+} from 'lucide-react';
+import { MODULE_REGISTRY, MODULE_STATUS } from '@shared/modules.js';
+
+const ICON_MAP = {
+  Layers,
+  Wrench,
+  TrendingUp,
+  Package,
+  ShoppingCart,
+  Search,
+  Eye,
   Copy,
   FileSpreadsheet,
   ShieldCheck,
   Trash2,
   ChevronLeft
-} from 'lucide-react';
+};
 
 export default function FioriLaunchpad({
   onOpenAction,
   sapSession,
   systemKey = 'DEV',
   subView = 'home',
-  onSubViewChange
+  onSubViewChange,
+  enabledModules = [],
+  userRole = 'user',
+  selectedGroup,
+  onSelectGroup
 }) {
   const [internalView, setInternalView] = useState(subView || 'home');
   const currentView = subView !== undefined ? subView : internalView;
+
+  const [internalGroup, setInternalGroup] = useState('');
+  const currentGroup = selectedGroup !== undefined ? selectedGroup : internalGroup;
+  const tabRefs = useRef({});
 
   const handleSetView = (view) => {
     setInternalView(view);
@@ -29,94 +56,86 @@ export default function FioriLaunchpad({
     }
   };
 
-  // Level 1: Launchpad Home Modules
-  const homeGroups = [
-    {
-      name: 'Production Planning',
-      modules: [
-        {
-          id: 'bom',
-          title: 'Bill of Materials',
-          desc: 'Create, copy, change, display and delete BOMs',
-          icon: Layers,
-          kpiNum: '5',
-          kpiLabel: 'apps',
-          onClick: () => handleSetView('bom_operations')
-        },
-        {
-          id: 'rout',
-          title: 'Routing',
-          desc: 'Task lists and operations',
-          icon: Wrench,
-          soon: true
-        },
-        {
-          id: 'prod',
-          title: 'Production Orders',
-          desc: 'Order release and confirmation',
-          icon: TrendingUp,
-          soon: true
-        }
-      ]
-    },
-    {
-      name: 'Master Data',
-      modules: [
-        {
-          id: 'mat',
-          title: 'Material Master',
-          desc: 'Material data maintenance',
-          icon: Package,
-          soon: true
-        }
-      ]
+  const handleSelectGroup = (groupName) => {
+    setInternalGroup(groupName);
+    if (onSelectGroup) {
+      onSelectGroup(groupName);
     }
-  ];
+  };
 
-  // Level 2: Bill of Materials Operations (Our 5 Apps)
-  const bomOperations = [
-    {
-      id: 'display',
-      title: 'Display BOM',
-      desc: 'Read BOM header and components',
-      icon: Search,
-      fm: 'CSAP_MAT_BOM_READ',
-      action: 'bom_explorer'
-    },
-    {
-      id: 'copy',
-      title: 'Copy BOM',
-      desc: 'Copy a BOM from source to target',
-      icon: Copy,
-      fm: 'CSAP_MAT_BOM_CREATE',
-      action: 'copy_bom'
-    },
-    {
-      id: 'bulk',
-      title: 'Bulk Copy BOM',
-      desc: 'Excel mass upload & batch sequential RFC',
-      icon: FileSpreadsheet,
-      fm: 'BATCH RFC',
-      action: 'bulk_bom'
-    },
-    {
-      id: 'validate',
-      title: 'Validate BOM',
-      desc: 'Pre-flight validation of material and BOM in SAP',
-      icon: ShieldCheck,
-      fm: 'CSAP_MAT_BOM_READ',
-      action: 'validate_bom'
-    },
-    {
-      id: 'delete',
-      title: 'Delete BOM',
-      desc: 'Delete a BOM (confirmation required)',
-      icon: Trash2,
-      fm: 'CSAP_MAT_BOM_DELETE',
-      danger: true,
-      action: 'delete_bom'
+  // 1. Filter modules strictly based on role and current server enablement
+  // - Coming soon tiles visible ONLY to admins (hidden for regular users)
+  // - Available modules visible ONLY IF enabled on current server (hidden if not enabled)
+  const visibleModules = MODULE_REGISTRY.filter((mod) => {
+    if (mod.status === MODULE_STATUS.COMING_SOON) {
+      return userRole === 'admin';
     }
-  ];
+    return enabledModules.includes(mod.key);
+  });
+
+  // 2. Derive unique groups in the order they appear in MODULE_REGISTRY (dynamic, no hardcoded groups)
+  const groupOrder = [];
+  MODULE_REGISTRY.forEach((m) => {
+    const groupName = m.group || 'Applications';
+    if (!groupOrder.includes(groupName)) {
+      groupOrder.push(groupName);
+    }
+  });
+
+  // 3. Keep only groups that have at least one visible module
+  const homeGroups = groupOrder
+    .map((name) => ({
+      name,
+      modules: visibleModules.filter((m) => (m.group || 'Applications') === name)
+    }))
+    .filter((g) => g.modules.length > 0);
+
+  // 4. Derive active group:
+  // If currentGroup matches a currently visible group, use it.
+  // Otherwise, fallback to the first visible group (homeGroups[0])
+  const activeGroup = homeGroups.find((g) => g.name === currentGroup) || homeGroups[0] || null;
+  const activeGroupName = activeGroup ? activeGroup.name : '';
+
+  // Synchronize active group with parent when falling back (e.g. server switch)
+  useEffect(() => {
+    if (activeGroupName && activeGroupName !== currentGroup) {
+      if (onSelectGroup) {
+        onSelectGroup(activeGroupName);
+      }
+    }
+  }, [activeGroupName, currentGroup, onSelectGroup]);
+
+  // Keyboard navigation for tablist (WAI-ARIA APG pattern)
+  const handleTabKeyDown = (e, currentIndex) => {
+    if (homeGroups.length <= 1) return;
+
+    let targetIndex = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      targetIndex = (currentIndex + 1) % homeGroups.length;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      targetIndex = (currentIndex - 1 + homeGroups.length) % homeGroups.length;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      targetIndex = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      targetIndex = homeGroups.length - 1;
+    }
+
+    if (targetIndex !== null) {
+      const targetGroup = homeGroups[targetIndex];
+      handleSelectGroup(targetGroup.name);
+      const targetBtn = tabRefs.current[targetGroup.name];
+      if (targetBtn) {
+        targetBtn.focus();
+      }
+    }
+  };
+
+  // Identify active module if in a sub-operations view
+  const activeModule = MODULE_REGISTRY.find((m) => m.subView === currentView);
 
   return (
     <div className="fiori-launchpad-root">
@@ -125,27 +144,75 @@ export default function FioriLaunchpad({
         <>
           <div className="fiori-ph">
             <h1 className="fiori-ph-title">My Home</h1>
+
+            {/* Dynamic Horizontal Tab Bar */}
+            {homeGroups.length > 0 && (
+              <div
+                className="fiori-home-tabs"
+                role="tablist"
+                aria-label="Application categories"
+              >
+                {homeGroups.map((group, index) => {
+                  const isActive = group.name === activeGroupName;
+                  const tabSlug = group.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                  return (
+                    <button
+                      key={group.name}
+                      ref={(el) => {
+                        tabRefs.current[group.name] = el;
+                      }}
+                      type="button"
+                      role="tab"
+                      id={`fiori-home-tab-${tabSlug}`}
+                      aria-selected={isActive}
+                      aria-controls={`fiori-home-tabpanel-${tabSlug}`}
+                      tabIndex={isActive ? 0 : -1}
+                      className={`sap-btn fiori-home-tab ${isActive ? 'sap-btn-primary active' : 'sap-btn-secondary'}`}
+                      onClick={() => handleSelectGroup(group.name)}
+                      onKeyDown={(e) => handleTabKeyDown(e, index)}
+                    >
+                      <span>{group.name}</span>
+                      <span className="fiori-home-tab-badge">
+                        {group.modules.length}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="fiori-body">
-            {homeGroups.map((group) => (
-              <div key={group.name} style={{ marginBottom: 24 }}>
-                <div className="fiori-group-title">{group.name}</div>
+            {activeGroup && activeGroup.modules.length > 0 ? (
+              <div
+                key={activeGroup.name}
+                role="tabpanel"
+                id={`fiori-home-tabpanel-${activeGroup.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                aria-labelledby={`fiori-home-tab-${activeGroup.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                tabIndex={0}
+                style={{ outline: 'none' }}
+              >
                 <div className="fiori-tiles-grid">
-                  {group.modules.map((mod) => {
-                    const Icon = mod.icon;
+                  {activeGroup.modules.map((mod) => {
+                    const Icon = ICON_MAP[mod.iconName] || Layers;
+                    const isSoon = mod.status === MODULE_STATUS.COMING_SOON;
+
                     return (
                       <button
-                        key={mod.id}
+                        key={mod.key}
                         type="button"
-                        className={`fiori-tile ${mod.soon ? 'off' : ''}`}
-                        disabled={mod.soon}
-                        onClick={mod.onClick}
+                        className={`fiori-tile ${isSoon ? 'off' : ''}`}
+                        disabled={isSoon}
+                        onClick={() => {
+                          if (!isSoon && mod.subView) {
+                            handleSetView(mod.subView);
+                          }
+                        }}
                       >
-                        {mod.soon && (
+                        {isSoon && (
                           <span className="fiori-tile-top-pill">Coming soon</span>
                         )}
-                        <div className="fiori-tile-title">{mod.title}</div>
+                        <div className="fiori-tile-title">{mod.label}</div>
                         <div className="fiori-tile-desc">{mod.desc}</div>
                         <div className="fiori-tile-bottom">
                           <div className="fiori-tile-icon">
@@ -163,11 +230,50 @@ export default function FioriLaunchpad({
                   })}
                 </div>
               </div>
-            ))}
+            ) : (
+              /* Empty Launchpad State when zero modules are enabled for this server */
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '60px 20px',
+                  textAlign: 'center',
+                  background: 'var(--sap-card-bg)',
+                  borderRadius: 'var(--radius-xl)',
+                  border: '1px solid var(--sap-border-subtle)',
+                  margin: '20px 0'
+                }}
+              >
+                <div
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 'var(--radius-full)',
+                    background: 'var(--sap-surface-empty)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 16,
+                    color: 'var(--sap-text-muted)'
+                  }}
+                >
+                  <AlertCircle size={28} />
+                </div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--sap-text-dark)', margin: '0 0 8px' }}>
+                  No Modules Enabled
+                </h3>
+                <p style={{ fontSize: 14, color: 'var(--sap-text-muted)', maxWidth: 440, margin: 0, lineHeight: 1.5 }}>
+                  There are currently no functional modules enabled for this SAP server.
+                  Please select another server or contact an administrator to grant module access.
+                </p>
+              </div>
+            )}
           </div>
         </>
-      ) : (
-        /* ================= LEVEL 2: BILL OF MATERIALS OPERATIONS ================= */
+      ) : activeModule ? (
+        /* ================= LEVEL 2: DYNAMIC MODULE OPERATIONS ================= */
         <>
           <div className="fiori-ph">
             <div className="fiori-bc">
@@ -179,7 +285,7 @@ export default function FioriLaunchpad({
                 Home
               </button>
               <span className="fiori-bc-sep">›</span>
-              <span className="fiori-bc-current">Bill of Materials</span>
+              <span className="fiori-bc-current">{activeModule.label}</span>
             </div>
             <div className="fiori-ph-title-row">
               <button
@@ -191,37 +297,46 @@ export default function FioriLaunchpad({
               >
                 <ChevronLeft size={16} />
               </button>
-              <h1 className="fiori-ph-title">Bill of Materials</h1>
+              <h1 className="fiori-ph-title">{activeModule.label}</h1>
             </div>
             <p className="fiori-ph-subtitle">Choose an operation</p>
           </div>
 
           <div className="fiori-body">
             <div className="fiori-group-title">Operations</div>
-            <div className="fiori-tiles-grid">
-              {bomOperations.map((op) => {
-                const Icon = op.icon;
+            <div className="fiori-op-grid">
+              {(activeModule.subApps || []).map((op) => {
+                const Icon = (op.id === 'display' || op.iconName === 'Eye') ? Eye : (ICON_MAP[op.iconName] || Search);
+                const isDanger = Boolean(op.danger || op.id === 'delete');
                 return (
                   <button
                     key={op.id}
                     type="button"
-                    className="fiori-tile"
+                    className={`fiori-op-card ${isDanger ? 'danger' : ''}`}
                     onClick={() => onOpenAction(op.action)}
                   >
-                    <div className="fiori-tile-title">{op.title}</div>
-                    <div className="fiori-tile-desc">{op.desc}</div>
-                    <div className="fiori-tile-bottom">
-                      <div className={`fiori-tile-icon ${op.danger ? 'danger' : ''}`}>
-                        <Icon size={32} strokeWidth={1.7} />
-                      </div>
-                      <div className="fiori-tile-tech">{op.fm}</div>
+                    <div className={`fiori-op-icon-badge ${isDanger ? 'danger' : ''}`}>
+                      <Icon size={28} strokeWidth={1.8} />
                     </div>
+                    <div className="fiori-op-title">{op.title}</div>
+                    <div className="fiori-op-desc">{op.desc}</div>
                   </button>
                 );
               })}
             </div>
           </div>
         </>
+      ) : (
+        /* Fallback if view not recognized */
+        <div style={{ padding: 24, textAlign: 'center' }}>
+          <button
+            type="button"
+            className="sap-btn sap-btn-secondary"
+            onClick={() => handleSetView('home')}
+          >
+            Return to Home
+          </button>
+        </div>
       )}
     </div>
   );

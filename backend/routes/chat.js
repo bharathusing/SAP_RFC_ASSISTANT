@@ -58,6 +58,9 @@ import {
   validateCreateFields,
   validateUpdateChanges
 } from '../config/entitySchemas/index.js';
+import { requireAuth, requireServerAccess } from '../middleware/auth.js';
+import { supabaseService } from '../services/supabaseClient.js';
+import { MODULE_KEYS } from '../config/modules.js';
 
 const router = express.Router();
 
@@ -105,7 +108,8 @@ export async function validateCopyBomParameters({
   targetMaterial,
   targetPlant,
   targetUsage = '1',
-  targetAltBom = ''
+  targetAltBom = '',
+  server
 }) {
   const cleanSrcMat = String(sourceMaterial || '').trim();
   const cleanSrcPlant = String(sourcePlant || '').trim();
@@ -161,7 +165,8 @@ export async function validateCopyBomParameters({
           material: cleanSrcMat,
           plant: cleanSrcPlant,
           bomUsage: cleanSrcUsage,
-          alternativeBom: cleanSrcAlt
+          alternativeBom: cleanSrcAlt,
+          server
         })
       : await verifyBomInCs03({
           material: cleanSrcMat,
@@ -1001,15 +1006,17 @@ function getSessionCredentials(req) {
  * Helper to retrieve username from active session
  */
 function getSessionUsername(req) {
-  if (process.env.SKIP_GATEWAY_AUTH === 'true') {
-    return process.env.GATEWAY_BYPASS_USER || getActiveSapUser() || 'LEELAM_EXT';
+  if (req.user?.email) {
+    return req.user.email;
   }
-
-  const sessionId = req.cookies?.sap_session_id;
-  if (!sessionId) return getActiveSapUser() || 'MOCK_USER';
+  if (req.sapSession?.username) {
+    return req.sapSession.username;
+  }
+  const sessionId = req.cookies?.sb_access_token || req.cookies?.sap_session_id;
+  if (!sessionId) return getActiveSapUser() || 'SYSTEM';
 
   const session = sessionStore.getSession(sessionId);
-  return session?.username || getActiveSapUser() || 'MOCK_USER';
+  return session?.username || getActiveSapUser() || 'SYSTEM';
 }
 
 /**
@@ -1213,7 +1220,7 @@ function logOpenRouterError(stage, err) {
  * POST /api/chat
  * Multi-entity conversational endpoint supporting read & human-confirmed writes.
  */
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, requireServerAccess(), async (req, res, next) => {
   const username = getSessionUsername(req);
   const systemKey = req.body?.systemKey && isValidSystemKey(req.body.systemKey)
     ? req.body.systemKey
@@ -1236,6 +1243,18 @@ router.post('/', async (req, res) => {
     }
 
     const actionSystem = action.systemKey || systemKey;
+
+    // Module Access Gate for confirmed actions
+    if (['copy_bom', 'delete_bom'].includes(action.type) || action.entityKey === 'bom') {
+      const isEnabled = await supabaseService.isModuleEnabledForServer(req.selectedServer?.id, MODULE_KEYS.BOM);
+      if (!isEnabled) {
+        return res.status(403).json({
+          reply: '❌ Module not enabled for this server',
+          error: 'Module not enabled for this server'
+        });
+      }
+    }
+
     const isLevel3OrAbove = (action.riskLevel && action.riskLevel >= 3) ||
       requiresChangeReason(action.riskLevel) ||
       Boolean(action.requiresReason) ||
@@ -1485,6 +1504,7 @@ router.post('/', async (req, res) => {
       // Mandatory Audit Logging (for copy_bom, each BOM in the hierarchy is already logged individually above)
       if (action.type !== 'copy_bom') {
         auditLogger.logAction({
+          user: username,
           sapUsername: username,
           entityKey,
           actionType: action.type,
@@ -1494,7 +1514,7 @@ router.post('/', async (req, res) => {
           afterValues: result.after,
           sourcePrompt: action.sourcePrompt,
           actionId: action.actionId,
-          system: actionSystem,
+          system: (action.systemKey && ['PROD', 'QA', 'DEV'].includes(action.systemKey)) ? action.systemKey : (req.selectedServer?.name || actionSystem),
           reason: providedReason || null
         });
       }
@@ -1502,10 +1522,14 @@ router.post('/', async (req, res) => {
       // Clear the action from pending store
       pendingActionStore.clearPendingAction(actionId);
 
+      const resolvedAlt = result?.alternativeBom || result?.alternative || action?.payload?.target?.alternativeBom || action?.payload?.targetAltBom || result?.after?.alternativeBom || result?.after?.alternative;
+
       return res.status(200).json({
         reply: `✅ ${executedMessage}`,
         data,
         error: false,
+        createdAlternative: resolvedAlt,
+        targetAlternative: resolvedAlt,
         actionExecuted: {
           actionId,
           type: action.type,
@@ -1516,10 +1540,13 @@ router.post('/', async (req, res) => {
           reason: providedReason || null,
           status: result?.status,
           warnings: result?.warnings,
-          differences: result?.differences
+          differences: result?.differences,
+          alternative: resolvedAlt
         },
         actionResult: {
           ...result,
+          createdAlternative: resolvedAlt,
+          targetAlternative: resolvedAlt,
           createdSubBoms: action.type === 'copy_bom' && Array.isArray(data) && data.length > 1 ? data.slice(0, -1) : []
         }
       });
@@ -1557,6 +1584,17 @@ router.post('/', async (req, res) => {
   const activeSystem = systemKey || req.sapSession?.systemKey || 'DEV';
   let activeEntitySchema = null;
 
+  // Module Access Gate for structured BOM form submissions
+  if (['copy_bom', 'delete_bom'].includes(actionType)) {
+    const isEnabled = await supabaseService.isModuleEnabledForServer(req.selectedServer?.id, MODULE_KEYS.BOM);
+    if (!isEnabled) {
+      return res.status(403).json({
+        reply: '❌ Module not enabled for this server',
+        error: 'Module not enabled for this server'
+      });
+    }
+  }
+
   // Direct handling for structured Copy BOM form submission
   if (actionType === 'copy_bom' && copyBomParams) {
     const sourceMaterial = String(copyBomParams.sourceMaterial || '').trim();
@@ -1577,7 +1615,8 @@ router.post('/', async (req, res) => {
       targetMaterial,
       targetPlant,
       targetUsage,
-      targetAltBom
+      targetAltBom,
+      server: req.selectedServer
     });
 
     if (!validation.valid) {
@@ -1720,7 +1759,8 @@ router.post('/', async (req, res) => {
           material,
           plant,
           bomUsage,
-          alternativeBom
+          alternativeBom,
+          server: req.selectedServer
         })
       : await verifyBomInCs03({
           material,
@@ -1817,6 +1857,9 @@ router.post('/', async (req, res) => {
       error: false
     });
   }
+
+  // Not a confirmation or shortcut BOM action, pass to main chat handler
+  return next();
 });
 
 /**
@@ -1875,7 +1918,10 @@ export function detectMaterialCheckIntent(userPrompt) {
 }
 
 router.post('/', async (req, res) => {
-  const { message, history } = req.body || {};
+  const { message, history, systemKey } = req.body || {};
+  const activeSystem = (systemKey && isValidSystemKey(systemKey))
+    ? systemKey
+    : (req.selectedServer?.environment || DEFAULT_SYSTEM);
   let activeEntitySchema = null;
 
   if (!message || typeof message !== 'string' || !message.trim()) {
@@ -2055,6 +2101,33 @@ router.post('/', async (req, res) => {
           });
         }
 
+        // Module Access Gate for BOM-related AI tools
+        const isBomRelated = [
+          'propose_copy_bom',
+          'propose_delete_bom',
+          'propose_create_bom',
+          'read_bom'
+        ].includes(fnName) || (
+          ['get_entity_data', 'get_business_partners', 'propose_delete_entity_record', 'propose_change_record'].includes(fnName) &&
+          resolveEntityKey(toolArgs.entityKey, message) === 'bom'
+        );
+
+        if (isBomRelated) {
+          const isEnabled = await supabaseService.isModuleEnabledForServer(req.selectedServer?.id, MODULE_KEYS.BOM);
+          if (!isEnabled) {
+            toolMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: fnName,
+              content: JSON.stringify({ error: 'Module not enabled for this server' })
+            });
+            return res.status(403).json({
+              reply: '⚠️ Bill of Materials module is not enabled for this SAP server.',
+              error: 'Module not enabled for this server'
+            });
+          }
+        }
+
         // TOOL 1: get_entity_data (or legacy get_business_partners)
         if (fnName === 'get_entity_data' || fnName === 'get_business_partners') {
           const entityKey = resolveEntityKey(toolArgs.entityKey, message);
@@ -2079,7 +2152,8 @@ router.post('/', async (req, res) => {
               sourceUsage: srcUsage,
               targetMaterial: tgtMat,
               targetPlant: tgtPlant,
-              targetUsage: tgtUsage
+              targetUsage: tgtUsage,
+              server: req.selectedServer
             });
 
             if (!validation.valid) {
@@ -2449,7 +2523,8 @@ router.post('/', async (req, res) => {
                   sourceUsage: srcUsage,
                   targetMaterial: tgtMat,
                   targetPlant: tgtPlant,
-                  targetUsage: tgtUsage
+                  targetUsage: tgtUsage,
+                  server: req.selectedServer
                 });
 
                 if (!validation.valid) {
@@ -2638,7 +2713,8 @@ router.post('/', async (req, res) => {
               targetMaterial,
               targetPlant,
               targetUsage,
-              targetAltBom
+              targetAltBom,
+              server: req.selectedServer
             });
 
             if (!validation.valid) {
@@ -2785,7 +2861,8 @@ router.post('/', async (req, res) => {
                   material,
                   plant,
                   bomUsage,
-                  alternativeBom
+                  alternativeBom,
+                  server: req.selectedServer
                 })
               : await verifyBomInCs03({
                   material,

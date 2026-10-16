@@ -11,8 +11,10 @@ import {
   ArrowRight,
   RefreshCw,
   Copy,
-  Layers
+  Layers,
+  Info
 } from 'lucide-react';
+import activityTracker from '../services/activityTracker';
 
 export default function ConfirmationCard({
   action,
@@ -75,6 +77,19 @@ export default function ConfirmationCard({
     };
   }, [expiresAt, status, isActionTriggered, isExecuting, isDone, isFailed, isExpired, stopTimer]);
 
+  // Track pending confirmation and executing operation for logout warning
+  useEffect(() => {
+    const isPending = status === 'pending' && !isActionTriggered && !isExecuting && !isDone && !isFailed && !isExpired;
+    const cardKey = `card_${actionId || 'pending'}`;
+    activityTracker.setConfirmation(cardKey, isPending);
+    activityTracker.setOperation(cardKey, isExecuting);
+
+    return () => {
+      activityTracker.setConfirmation(cardKey, false);
+      activityTracker.setOperation(cardKey, false);
+    };
+  }, [actionId, status, isExecuting, isActionTriggered, isDone, isFailed, isExpired]);
+
   const handleConfirmClick = () => {
     setIsActionTriggered(true);
     stopTimer();
@@ -106,76 +121,76 @@ export default function ConfirmationCard({
     if (type === 'copy_bom') {
       return {
         title: `Copy BOM Confirmation Required (CS01 Automation)`,
-        icon: <Copy size={16} color="#0070f2" />,
+        icon: <Copy size={16} color="var(--sap-primary)" />,
         accentClass: 'sap-confirm-card-info'
       };
     }
     if (type === 'delete_bom') {
       return {
         title: `Delete BOM Confirmation Required (ZBOM_COPY)`,
-        icon: <Trash2 size={16} color="#bb0000" />,
+        icon: <Trash2 size={16} color="var(--sap-error)" />,
         accentClass: 'sap-confirm-card-danger'
       };
     }
     if (type === 'delete') {
       return {
         title: `Delete ${entityLabel} Confirmation Required`,
-        icon: <Trash2 size={16} color="#bb0000" />,
+        icon: <Trash2 size={16} color="var(--sap-error)" />,
         accentClass: 'sap-confirm-card-danger'
       };
     }
     if (type === 'create') {
       return {
         title: `New ${entityLabel} Proposal`,
-        icon: <UserPlus size={16} color="#0070f2" />,
+        icon: <UserPlus size={16} color="var(--sap-primary)" />,
         accentClass: 'sap-confirm-card-info'
       };
     }
     if (type === 'retry') {
       return {
         title: `Retry Background Job Confirmation`,
-        icon: <RefreshCw size={16} color="#d97706" />,
+        icon: <RefreshCw size={16} color="var(--sap-warning)" />,
         accentClass: 'sap-confirm-card-warning'
       };
     }
     if (type === 'reprocess') {
       return {
         title: `Reprocess IDoc Confirmation`,
-        icon: <RefreshCw size={16} color="#0284c7" />,
+        icon: <RefreshCw size={16} color="var(--sap-primary)" />,
         accentClass: 'sap-confirm-card-info'
       };
     }
     if (type === 'retrigger') {
       return {
         title: `Retrigger Interface Confirmation`,
-        icon: <RefreshCw size={16} color="#059669" />,
+        icon: <RefreshCw size={16} color="var(--sap-success)" />,
         accentClass: 'sap-confirm-card-info'
       };
     }
     if (type === 'release_po') {
       return {
         title: `Release Purchase Order Confirmation (Level 3 - ${targetSystem})`,
-        icon: <AlertTriangle size={16} color="#d97706" />,
+        icon: <AlertTriangle size={16} color="var(--sap-warning)" />,
         accentClass: 'sap-confirm-card-warning'
       };
     }
     if (type === 'post_fi_doc') {
       return {
         title: `Post Financial Document (Level 3 Critical - ${targetSystem})`,
-        icon: <AlertOctagon size={16} color="#bb0000" />,
+        icon: <AlertOctagon size={16} color="var(--sap-error)" />,
         accentClass: 'sap-confirm-card-danger'
       };
     }
     if (type === 'change_master_data') {
       return {
         title: `Master Data Modification (Level 3 - ${targetSystem})`,
-        icon: <AlertTriangle size={16} color="#d97706" />,
+        icon: <AlertTriangle size={16} color="var(--sap-warning)" />,
         accentClass: 'sap-confirm-card-warning'
       };
     }
     return {
       title: `Update ${entityLabel} Proposal`,
-      icon: <Edit3 size={16} color="#0070f2" />,
+      icon: <Edit3 size={16} color="var(--sap-primary)" />,
       accentClass: 'sap-confirm-card-info'
     };
   };
@@ -237,7 +252,7 @@ export default function ConfirmationCard({
               {recordName && <span>({recordName})</span>}
             </div>
 
-            <div className="sap-diff-table-wrapper">
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Proposal Diff Table">
               <table className="sap-diff-table">
                 <thead>
                   <tr>
@@ -289,7 +304,7 @@ export default function ConfirmationCard({
               A new {entityLabel} record will be created:
             </div>
 
-            <div className="sap-diff-table-wrapper">
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Proposal Diff Table">
               <table className="sap-diff-table">
                 <thead>
                   <tr>
@@ -319,55 +334,98 @@ export default function ConfirmationCard({
         {/* CASE 2B: COPY BOM PROPOSAL */}
         {type === 'copy_bom' && (
           <div>
-            <div className="sap-confirm-partner-meta" style={{ fontWeight: 600, fontSize: '13px', marginBottom: 12 }}>
+            <div className="sap-confirm-partner-meta" style={{ fontWeight: 600, fontSize: '13px', marginBottom: 12, color: 'var(--sap-text)' }}>
               {preview?.summary || `Copy BOM: ${preview?.sourceMaterial} (Plant ${preview?.sourcePlant}) → ${preview?.targetMaterial} (Plant ${preview?.targetPlant})`}
             </div>
 
-            <div className="sap-diff-table-wrapper">
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Proposal Diff Table">
               <table className="sap-diff-table">
                 <thead>
                   <tr>
-                    <th>Parameter</th>
-                    <th>Source (Reference BOM)</th>
-                    <th>Target (New BOM)</th>
+                    <th style={{ width: '28%' }}>Parameter</th>
+                    <th style={{ width: '36%' }}>Source (Reference BOM)</th>
+                    <th style={{ width: '36%' }}>Target (New BOM)</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
                     <td className="sap-diff-field-name">Material</td>
-                    <td style={{ color: '#64748b' }}>{preview?.sourceMaterial}</td>
-                    <td className="sap-diff-new-val"><strong>{preview?.targetMaterial}</strong></td>
+                    <td style={{ color: 'var(--sap-text-muted)' }}>{preview?.sourceMaterial}</td>
+                    <td>
+                      {preview?.sourceMaterial !== preview?.targetMaterial ? (
+                        <span style={{ padding: '2px 8px', borderRadius: 'var(--sap-radius)', background: 'var(--sap-success-bg)', color: 'var(--sap-success-text)', fontWeight: 600 }}>
+                          {preview?.targetMaterial}
+                        </span>
+                      ) : (
+                        <strong style={{ color: 'var(--sap-text)' }}>{preview?.targetMaterial}</strong>
+                      )}
+                    </td>
                   </tr>
                   <tr>
                     <td className="sap-diff-field-name">Plant</td>
-                    <td style={{ color: '#64748b' }}>{preview?.sourcePlant}</td>
-                    <td className="sap-diff-new-val"><strong>{preview?.targetPlant}</strong></td>
+                    <td style={{ color: 'var(--sap-text-muted)' }}>{preview?.sourcePlant}</td>
+                    <td>
+                      {preview?.sourcePlant !== preview?.targetPlant ? (
+                        <span style={{ padding: '2px 8px', borderRadius: 'var(--sap-radius)', background: 'var(--sap-success-bg)', color: 'var(--sap-success-text)', fontWeight: 600 }}>
+                          {preview?.targetPlant}
+                        </span>
+                      ) : (
+                        <strong style={{ color: 'var(--sap-text)' }}>{preview?.targetPlant}</strong>
+                      )}
+                    </td>
                   </tr>
                   <tr>
                     <td className="sap-diff-field-name">BOM Usage</td>
-                    <td style={{ color: '#64748b' }}>{preview?.sourceUsage || '1'}</td>
-                    <td className="sap-diff-new-val"><strong>{preview?.targetUsage || '1'}</strong></td>
+                    <td style={{ color: 'var(--sap-text-muted)' }}>{preview?.sourceUsage || '1'}</td>
+                    <td>
+                      {preview?.sourceUsage !== preview?.targetUsage ? (
+                        <span style={{ padding: '2px 8px', borderRadius: 'var(--sap-radius)', background: 'var(--sap-success-bg)', color: 'var(--sap-success-text)', fontWeight: 600 }}>
+                          {preview?.targetUsage || '1'}
+                        </span>
+                      ) : (
+                        <strong style={{ color: 'var(--sap-text)' }}>{preview?.targetUsage || '1'}</strong>
+                      )}
+                    </td>
                   </tr>
                   {(preview?.sourceAltBom || preview?.targetAltBom) && (
                     <tr>
                       <td className="sap-diff-field-name">Alternative BOM</td>
-                      <td style={{ color: '#64748b' }}>{preview?.sourceAltBom || 'Default'}</td>
-                      <td className="sap-diff-new-val"><strong>{preview?.targetAltBom || 'Auto-select'}</strong></td>
+                      <td style={{ color: 'var(--sap-text-muted)' }}>{preview?.sourceAltBom || 'Default'}</td>
+                      <td>
+                        <span style={{ padding: '2px 8px', borderRadius: 'var(--sap-radius)', background: 'var(--sap-primary-light)', color: 'var(--sap-primary)', fontWeight: 600, fontSize: '11px' }}>
+                          {preview?.targetAltBom || 'Auto-select'}
+                        </span>
+                      </td>
                     </tr>
                   )}
                   {preview?.validFrom && (
                     <tr>
                       <td className="sap-diff-field-name">Valid From</td>
-                      <td style={{ color: '#64748b' }}>-</td>
-                      <td className="sap-diff-new-val"><strong>{preview?.validFrom}</strong></td>
+                      <td style={{ color: 'var(--sap-text-muted)' }}>-</td>
+                      <td style={{ color: 'var(--sap-text)', fontWeight: 600 }}>{preview?.validFrom}</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
 
-            <div style={{ marginTop: 12, padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: '12px', color: '#475569', lineHeight: 1.5 }}>
-              ℹ️ The complete BOM hierarchy will be copied and structurally verified. Any sub-BOMs will be preserved, and existing BOMs in the target plant will not be overwritten (created under the next available alternative).
+            <div style={{
+              marginTop: 12,
+              padding: '10px 14px',
+              background: 'var(--sap-bg)',
+              border: '1px solid var(--sap-border)',
+              borderRadius: 'var(--sap-radius)',
+              fontSize: '12px',
+              color: 'var(--sap-text-muted)',
+              lineHeight: 1.5,
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8
+            }}>
+              <Info size={16} color="var(--sap-primary)" style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>
+                The complete BOM hierarchy will be copied and structurally verified. Any sub-BOMs will be preserved, and existing BOMs in the target plant will not be overwritten (created under the next available alternative).
+              </span>
             </div>
           </div>
         )}
@@ -376,7 +434,7 @@ export default function ConfirmationCard({
         {type === 'delete' && (
           <div>
             <div className="sap-confirm-danger-banner">
-              <AlertOctagon size={20} color="#bb0000" style={{ flexShrink: 0 }} />
+              <AlertOctagon size={20} color="var(--sap-error)" style={{ flexShrink: 0 }} />
               <div>
                 <strong>Warning: Permanent Deletion of {entityLabel}</strong>
                 <p style={{ fontSize: '12px', marginTop: 2 }}>
@@ -425,7 +483,7 @@ export default function ConfirmationCard({
         {type === 'delete_bom' && (
           <div>
             <div className="sap-confirm-danger-banner">
-              <AlertOctagon size={20} color="#bb0000" style={{ flexShrink: 0 }} />
+              <AlertOctagon size={20} color="var(--sap-error)" style={{ flexShrink: 0 }} />
               <div>
                 <strong>Warning: Permanent Deletion of Bill of Materials</strong>
                 <p style={{ fontSize: '12px', marginTop: 2 }}>
@@ -434,7 +492,7 @@ export default function ConfirmationCard({
               </div>
             </div>
 
-            <div className="sap-diff-table-wrapper" style={{ marginTop: 10 }}>
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Delete BOM Parameters" style={{ marginTop: 10 }}>
               <table className="sap-diff-table">
                 <thead>
                   <tr>
@@ -463,7 +521,7 @@ export default function ConfirmationCard({
               </table>
             </div>
 
-            <div style={{ marginTop: 10, fontSize: '12px', color: '#64748b' }}>
+            <div style={{ marginTop: 10, fontSize: '12px', color: 'var(--sap-text-muted)' }}>
               ℹ️ Executed directly via SAP RFC/BAPI connection. BOM operations are verified and committed directly in SAP S/4HANA.
             </div>
 
@@ -494,9 +552,9 @@ export default function ConfirmationCard({
 
             {/* Diagnostic Summary Box */}
             <div style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '6px',
+              background: 'var(--sap-bg)',
+              border: '1px solid var(--sap-border)',
+              borderRadius: 'var(--sap-radius)',
               padding: '12px 14px',
               marginBottom: 12,
               fontSize: '12.5px'
@@ -514,10 +572,10 @@ export default function ConfirmationCard({
                 <div style={{
                   fontFamily: 'var(--font-mono, monospace)',
                   fontSize: '11.5px',
-                  background: '#fee2e2',
-                  color: '#991b1b',
+                  background: 'var(--sap-error-bg)',
+                  color: 'var(--sap-error-text)',
                   padding: '6px 10px',
-                  borderRadius: '4px',
+                  borderRadius: 'var(--sap-radius)',
                   marginBottom: 8,
                   wordBreak: 'break-word'
                 }}>
@@ -531,7 +589,7 @@ export default function ConfirmationCard({
             </div>
 
             {/* Status Transition Table */}
-            <div className="sap-diff-table-wrapper">
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Proposal Diff Table">
               <table className="sap-diff-table">
                 <thead>
                   <tr>
@@ -579,9 +637,9 @@ export default function ConfirmationCard({
 
             {/* Diagnostic Summary Box */}
             <div style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '6px',
+              background: 'var(--sap-bg)',
+              border: '1px solid var(--sap-border)',
+              borderRadius: 'var(--sap-radius)',
               padding: '12px 14px',
               marginBottom: 12,
               fontSize: '12.5px'
@@ -599,10 +657,10 @@ export default function ConfirmationCard({
                 <div style={{
                   fontFamily: 'var(--font-mono, monospace)',
                   fontSize: '11.5px',
-                  background: '#fee2e2',
-                  color: '#991b1b',
+                  background: 'var(--sap-error-bg)',
+                  color: 'var(--sap-error-text)',
                   padding: '6px 10px',
-                  borderRadius: '4px',
+                  borderRadius: 'var(--sap-radius)',
                   marginBottom: 8,
                   wordBreak: 'break-word'
                 }}>
@@ -616,7 +674,7 @@ export default function ConfirmationCard({
             </div>
 
             {/* Status Transition Table */}
-            <div className="sap-diff-table-wrapper">
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Proposal Diff Table">
               <table className="sap-diff-table">
                 <thead>
                   <tr>
@@ -660,9 +718,9 @@ export default function ConfirmationCard({
 
             {/* Diagnostic Summary Box */}
             <div style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '6px',
+              background: 'var(--sap-bg)',
+              border: '1px solid var(--sap-border)',
+              borderRadius: 'var(--sap-radius)',
               padding: '12px 14px',
               marginBottom: 12,
               fontSize: '12.5px'
@@ -680,10 +738,10 @@ export default function ConfirmationCard({
                 <div style={{
                   fontFamily: 'var(--font-mono, monospace)',
                   fontSize: '11.5px',
-                  background: '#fee2e2',
-                  color: '#991b1b',
+                  background: 'var(--sap-error-bg)',
+                  color: 'var(--sap-error-text)',
                   padding: '6px 10px',
-                  borderRadius: '4px',
+                  borderRadius: 'var(--sap-radius)',
                   marginBottom: 8,
                   wordBreak: 'break-word'
                 }}>
@@ -697,7 +755,7 @@ export default function ConfirmationCard({
             </div>
 
             {/* Status Transition Table */}
-            <div className="sap-diff-table-wrapper">
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Proposal Diff Table">
               <table className="sap-diff-table">
                 <thead>
                   <tr>
@@ -737,7 +795,7 @@ export default function ConfirmationCard({
               </span>
             </div>
 
-            <div className="sap-diff-table-wrapper" style={{ marginTop: 8 }}>
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Action Parameters" style={{ marginTop: 8 }}>
               <table className="sap-diff-table">
                 <thead>
                   <tr>
@@ -788,7 +846,7 @@ export default function ConfirmationCard({
               Header: <strong>{preview.headerText || 'General Ledger Posting'}</strong> | Doc Type: <strong>{preview.documentType || 'SA'}</strong> | Environment: <strong>{targetSystem}</strong>
             </div>
 
-            <div className="sap-diff-table-wrapper">
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Proposal Diff Table">
               <table className="sap-diff-table">
                 <thead>
                   <tr>
@@ -811,12 +869,12 @@ export default function ConfirmationCard({
                       <td>{it.itemText || '—'}</td>
                     </tr>
                   ))}
-                  <tr style={{ background: '#f8fafc', fontWeight: 600 }}>
+                  <tr style={{ background: 'var(--sap-bg)', fontWeight: 600 }}>
                     <td colSpan={2}>Debit / Credit Totals:</td>
                     <td colSpan={2}>
                       Debit: {Number(preview.totalDebit || 0).toFixed(2)} | Credit: {Number(preview.totalCredit || 0).toFixed(2)}
                       {preview.isBalanced === false && (
-                        <span style={{ color: '#dc2626', marginLeft: 8 }}>(Unbalanced!)</span>
+                        <span style={{ color: 'var(--sap-error)', marginLeft: 8 }}>(Unbalanced!)</span>
                       )}
                     </td>
                   </tr>
@@ -837,7 +895,7 @@ export default function ConfirmationCard({
               </span>
             </div>
 
-            <div className="sap-diff-table-wrapper">
+            <div className="sap-diff-table-wrapper" tabIndex={0} role="region" aria-label="Proposal Diff Table">
               <table className="sap-diff-table">
                 <thead>
                   <tr>
@@ -866,8 +924,8 @@ export default function ConfirmationCard({
 
         {/* Mandatory Reason for Level 3 Actions */}
         {isLevel3 && !isDone && !isExpired && (
-          <div style={{ marginTop: 12, padding: '10px 12px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 6 }}>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#92400e', marginBottom: 4 }}>
+          <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--sap-warning-bg)', border: '1px solid var(--sap-warning-border)', borderRadius: 'var(--sap-radius)' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--sap-warning-text)', marginBottom: 4 }}>
               Mandatory Reason for Change (Business Justification):
             </label>
             <textarea
@@ -880,8 +938,8 @@ export default function ConfirmationCard({
                 width: '100%',
                 padding: '6px 8px',
                 fontSize: '12px',
-                border: '1px solid #d97706',
-                borderRadius: 4,
+                border: '1px solid var(--sap-warning)',
+                borderRadius: 'var(--sap-radius)',
                 boxSizing: 'border-box'
               }}
             />
@@ -890,10 +948,10 @@ export default function ConfirmationCard({
 
         {/* PROD Double-Confirmation Safeguard */}
         {isProd && isLevel3 && !isDone && !isExpired && (
-          <div style={{ marginTop: 10, padding: '10px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6 }}>
+          <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--sap-error-bg)', border: '1px solid var(--sap-error-border)', borderRadius: 'var(--sap-radius)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <AlertTriangle size={14} color="#dc2626" />
-              <span style={{ fontSize: '12px', fontWeight: 700, color: '#b91c1c' }}>
+              <AlertTriangle size={14} color="var(--sap-error)" />
+              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--sap-error-text)' }}>
                 PRODUCTION SAFEGUARD: Type "CONFIRM" to authorize
               </span>
             </div>
@@ -909,8 +967,8 @@ export default function ConfirmationCard({
                 fontSize: '12.5px',
                 fontWeight: 600,
                 fontFamily: 'monospace',
-                border: prodConfirmation === 'CONFIRM' ? '1.5px solid #16a34a' : '1.5px solid #dc2626',
-                borderRadius: 4,
+                border: prodConfirmation === 'CONFIRM' ? '1.5px solid var(--sap-success)' : '1.5px solid var(--sap-error)',
+                borderRadius: 'var(--sap-radius)',
                 boxSizing: 'border-box'
               }}
             />

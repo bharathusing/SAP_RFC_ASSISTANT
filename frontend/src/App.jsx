@@ -11,7 +11,9 @@ import {
   FileSpreadsheet,
   Trash2,
   Search,
-  MessageSquareCode
+  Eye,
+  ShieldCheck,
+  Server
 } from 'lucide-react';
 import Login from './components/Login';
 import ChatBox from './components/ChatBox';
@@ -21,22 +23,48 @@ import DeleteBomView from './components/DeleteBomView';
 import BomExplorerView from './components/BomExplorerView';
 import BulkBomView from './components/BulkBomView';
 import ValidateBomView from './components/ValidateBomView';
-import { checkSession, logoutUser, getAuthConfig, getSapSessionStatus, getSapSessions, selectSapSession } from './services/api';
+import AdminView from './components/AdminView';
+import Modal from './components/Modal';
+import {
+  checkSession,
+  logoutUser,
+  getAuthConfig,
+  getSapSessionStatus,
+  selectSapSession,
+  getAvailableServers,
+  setSelectedServerHeader,
+  getServerModules
+} from './services/api';
+import { MODULE_REGISTRY, getModuleKeyForAction } from '@shared/modules.js';
 import nextItPointLogo from './assets/next_it_point_logo.png';
+import activityTracker from './services/activityTracker';
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [authConfig, setAuthConfig] = useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // SAP Server selection state (dynamically loaded per user permissions)
+  const [availableServers, setAvailableServers] = useState([]);
+  const [selectedServer, setSelectedServer] = useState(null);
   const [currentSystem, setCurrentSystem] = useState('DEV'); // 'DEV' | 'QA' | 'PROD'
-  const [activeTab, setActiveTab] = useState('launchpad'); // 'launchpad' | 'copy_bom' | 'delete_bom' | 'bom_explorer' | 'ai_assistant'
+  const [enabledModules, setEnabledModules] = useState([]);
+
+  // Application view state
+  const [activeTab, setActiveTab] = useState('launchpad'); // 'launchpad' | 'copy_bom' | 'delete_bom' | 'bom_explorer' | 'validate_bom' | 'bulk_bom' | 'admin'
   const [launchpadSubView, setLaunchpadSubView] = useState('home'); // 'home' | 'bom_operations'
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-  const [isValidateModalOpen, setIsValidateModalOpen] = useState(false);
+  const [selectedHomeGroup, setSelectedHomeGroup] = useState('');
+
+  // Logout confirmation modal state
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [hasInterruptionRisk, setHasInterruptionRisk] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const [isSessionDropdownOpen, setIsSessionDropdownOpen] = useState(false);
   const [isSwitchingSession, setIsSwitchingSession] = useState(false);
   const sessionDropdownRef = useRef(null);
+
   const [sapSession, setSapSession] = useState({
     connected: false,
     status: 'CHECKING',
@@ -62,29 +90,25 @@ export default function App() {
     };
   }, []);
 
-  // Verify active session or gateway auth bypass on initial mount
+  // Check URL hash for admin routing on initial load
+  useEffect(() => {
+    if (window.location.hash === '#admin' || window.location.pathname === '/admin') {
+      if (user?.role === 'admin') {
+        setActiveTab('admin');
+      }
+    }
+  }, [user]);
+
+  // Verify active session on initial mount
   useEffect(() => {
     async function verifyAuth() {
       try {
         const config = await getAuthConfig();
         setAuthConfig(config);
 
-        if (config.skipGatewayAuth) {
-          setUser({
-            username: config.bypassUser || 'LEELAM_EXT',
-            sapMode: 'gui-only',
-            skipGatewayAuth: true
-          });
-          setIsCheckingAuth(false);
-          return;
-        }
-
         const sessionData = await checkSession();
-        if (sessionData.authenticated) {
-          setUser({
-            username: sessionData.username,
-            sapMode: sessionData.sapMode
-          });
+        if (sessionData.authenticated && sessionData.user) {
+          setUser(sessionData.user);
         }
       } catch {
         setUser(null);
@@ -96,8 +120,72 @@ export default function App() {
     verifyAuth();
   }, []);
 
+  // Load available SAP servers for the current authenticated user
+  useEffect(() => {
+    if (!user) {
+      setAvailableServers([]);
+      setSelectedServer(null);
+      setSelectedServerHeader(null);
+      return;
+    }
+
+    async function loadServers() {
+      try {
+        const servers = await getAvailableServers();
+        setAvailableServers(servers || []);
+
+        if (servers && servers.length > 0) {
+          // If previously saved server exists and is in available list, pick it; otherwise select first
+          const savedId = localStorage.getItem('selected_server_id');
+          const matched = servers.find((s) => s.id === savedId) || servers[0];
+          setSelectedServer(matched);
+          setSelectedServerHeader(matched.id);
+          setCurrentSystem(matched.environment || 'DEV');
+        } else {
+          setSelectedServer(null);
+          setSelectedServerHeader(null);
+        }
+      } catch (err) {
+        console.error('Failed to load permitted servers for user:', err);
+      }
+    }
+
+    loadServers();
+  }, [user]);
+
+  // Load enabled modules whenever selected server changes
+  useEffect(() => {
+    if (!selectedServer?.id) {
+      setEnabledModules([]);
+      return;
+    }
+
+    async function loadModules() {
+      try {
+        const modules = await getServerModules(selectedServer.id);
+        setEnabledModules(modules || []);
+      } catch (err) {
+        console.error('Failed to load server modules:', err);
+        setEnabledModules([]);
+      }
+    }
+
+    loadModules();
+  }, [selectedServer?.id]);
+
+  const handleServerChange = (serverId) => {
+    const chosen = availableServers.find((s) => s.id === serverId);
+    if (chosen) {
+      setSelectedServer(chosen);
+      setSelectedServerHeader(chosen.id);
+      setCurrentSystem(chosen.environment || 'DEV');
+      setSelectedHomeGroup('');
+    }
+  };
+
   const handleLoginSuccess = (userData) => {
     setUser(userData);
+    setSelectedHomeGroup('');
   };
 
   const handleLogout = async () => {
@@ -107,8 +195,51 @@ export default function App() {
       // Ignore network errors during logout
     } finally {
       setUser(null);
+      setAvailableServers([]);
+      setSelectedServer(null);
+      setActiveTab('launchpad');
+      setLaunchpadSubView('home');
+      setSelectedHomeGroup('');
     }
   };
+
+  const handleOpenLogoutModal = () => {
+    const risk = Boolean(isSwitchingSession || activityTracker.hasRunningOrPending());
+    setHasInterruptionRisk(risk);
+    setIsLogoutModalOpen(true);
+  };
+
+  const handleCloseLogoutModal = () => {
+    if (isLoggingOut) return;
+    setIsLogoutModalOpen(false);
+  };
+
+  const handleConfirmLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await handleLogout();
+    } finally {
+      setIsLoggingOut(false);
+      setIsLogoutModalOpen(false);
+    }
+  };
+
+  // Live risk sync when logout modal is open
+  useEffect(() => {
+    if (!isLogoutModalOpen) return;
+
+    const updateRisk = () => {
+      const risk = Boolean(isSwitchingSession || activityTracker.hasRunningOrPending());
+      setHasInterruptionRisk(risk);
+    };
+
+    updateRisk();
+    const unsubscribe = activityTracker.subscribe(updateRisk);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isLogoutModalOpen, isSwitchingSession]);
 
   const handleSelectSession = async (sessionId) => {
     if (!sessionId || isSwitchingSession) return;
@@ -128,9 +259,6 @@ export default function App() {
             status: 'CONNECTED',
             code: 'CONNECTED'
           }));
-        }
-        if (res.selectedUser && user && user.username !== res.selectedUser) {
-          setUser((prev) => (prev ? { ...prev, username: res.selectedUser } : prev));
         }
         setIsSessionDropdownOpen(false);
       }
@@ -153,13 +281,9 @@ export default function App() {
       if (isPolling || !isMounted) return;
       isPolling = true;
       try {
-        const data = await getSapSessionStatus();
+        const data = await getSapSessionStatus(selectedServer?.id);
         if (isMounted && data) {
           setSapSession(data);
-          const activeUser = data.selectedUser || data.user;
-          if (activeUser && user && user.username !== activeUser) {
-            setUser((prev) => (prev ? { ...prev, username: activeUser } : prev));
-          }
         }
       } catch (err) {
         if (isMounted) {
@@ -184,11 +308,11 @@ export default function App() {
       isMounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [user]);
+  }, [user, selectedServer?.id]);
 
   if (isCheckingAuth) {
     return (
-      <div className="sap-login-viewport" style={{ color: '#fff', flexDirection: 'column', gap: 16 }}>
+      <div className="sap-login-viewport" style={{ color: 'var(--sap-shell-text)', flexDirection: 'column', gap: 16 }}>
         <span className="sap-spinner" style={{ width: 36, height: 36, borderWidth: 3 }} />
         <p style={{ fontSize: 14, opacity: 0.8 }}>Initializing session...</p>
       </div>
@@ -213,21 +337,60 @@ export default function App() {
 
         {/* Desktop actions and user badge */}
         <div className="sap-shell-actions">
-          {/* SAP System Environment Selector */}
+          {/* Dynamic SAP Server Selector (populated from permitted servers) */}
           <div className="sap-system-select-wrapper">
-            <span className="sap-system-label">System:</span>
-            <select
-              value={currentSystem}
-              onChange={(e) => setCurrentSystem(e.target.value)}
-              className={`sap-system-select ${currentSystem === 'PROD' ? 'prod' : ''}`}
-            >
-              <option value="DEV">DEV (Sandbox)</option>
-              <option value="QA">QA (Quality)</option>
-              <option value="PROD">PROD (Production)</option>
-            </select>
-            {currentSystem === 'PROD' && (
-              <span className="sap-badge sap-badge-danger" style={{ fontSize: '10px', padding: '2px 6px' }}>
-                PROTECTED
+            <span className="sap-system-label">Server:</span>
+            {availableServers.length === 1 ? (
+              // Single server: skip dropdown and display clean fixed badge
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span
+                  className={`sap-badge ${
+                    selectedServer?.environment === 'PROD'
+                      ? 'sap-env-badge-prod'
+                      : selectedServer?.environment === 'QA'
+                      ? 'sap-env-badge-qa'
+                      : selectedServer?.environment === 'SANDBOX'
+                      ? 'sap-env-badge-sandbox'
+                      : 'sap-env-badge-dev'
+                  }`}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: 'var(--radius-full)'
+                  }}
+                >
+                  {selectedServer?.name} ({selectedServer?.environment})
+                </span>
+                {selectedServer?.environment === 'PROD' && (
+                  <span className="sap-badge sap-badge-danger" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                    PROTECTED
+                  </span>
+                )}
+              </div>
+            ) : availableServers.length > 1 ? (
+              // Multiple permitted servers: render dropdown selector
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <select
+                  value={selectedServer?.id || ''}
+                  onChange={(e) => handleServerChange(e.target.value)}
+                  className={`sap-system-select ${selectedServer?.environment === 'PROD' ? 'prod' : ''}`}
+                >
+                  {availableServers.map((srv) => (
+                    <option key={srv.id} value={srv.id}>
+                      {srv.name} ({srv.environment})
+                    </option>
+                  ))}
+                </select>
+                {selectedServer?.environment === 'PROD' && (
+                  <span className="sap-badge sap-badge-danger" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                    PROTECTED
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="sap-badge sap-badge-danger" style={{ fontSize: '11px', padding: '3px 8px' }}>
+                No Permitted Servers
               </span>
             )}
           </div>
@@ -330,34 +493,62 @@ export default function App() {
             style={sapSession.code === 'SELECTED_SESSION_UNAVAILABLE' ? { cursor: 'pointer' } : {}}
           >
             <span className={`sap-status-dot dot-${sapSession.connected ? 'connected' : (sapSession.status || 'checking').toLowerCase()}`}></span>
-            {sapSession.mode === 'RFC' && sapSession.connected ? (
-              <span>SAP RFC ONLINE {sapSession.latencyMs ? `(${sapSession.latencyMs}ms)` : ''}</span>
-            ) : sapSession.code === 'SELECTED_SESSION_UNAVAILABLE' ? (
-              <span>SELECTED SESSION DISCONNECTED</span>
-            ) : sapSession.status === 'CONNECTED' || sapSession.status === 'AVAILABLE' ? (
-              <span>SAP CONNECTED</span>
-            ) : sapSession.status === 'CHECKING' ? (
-              <span>CHECKING SAP...</span>
-            ) : sapSession.status === 'BUSY' ? (
-              <span>SAP BUSY</span>
-            ) : sapSession.status === 'SERVER_UNAVAILABLE' ? (
-              <span>SAP SERVER UNAVAILABLE</span>
-            ) : sapSession.status === 'DISCONNECTED' || sapSession.status === 'SESSION_NOT_FOUND' ? (
-              <span>SAP DISCONNECTED</span>
-            ) : (
-              <span>SAP {sapSession.status}</span>
-            )}
+            <span className="sap-session-pill-text">
+              {sapSession.mode === 'RFC' && sapSession.connected ? (
+                <>SAP RFC ONLINE {sapSession.latencyMs ? `(${sapSession.latencyMs}ms)` : ''}</>
+              ) : sapSession.code === 'SELECTED_SESSION_UNAVAILABLE' ? (
+                <>SELECTED SESSION DISCONNECTED</>
+              ) : sapSession.status === 'CONNECTED' || sapSession.status === 'AVAILABLE' ? (
+                <>SAP CONNECTED</>
+              ) : sapSession.status === 'CHECKING' ? (
+                <>CHECKING SAP...</>
+              ) : sapSession.status === 'BUSY' ? (
+                <>SAP BUSY</>
+              ) : sapSession.status === 'SERVER_UNAVAILABLE' ? (
+                <>SAP SERVER UNAVAILABLE</>
+              ) : sapSession.status === 'DISCONNECTED' || sapSession.status === 'SESSION_NOT_FOUND' ? (
+                <>SAP DISCONNECTED</>
+              ) : (
+                <>SAP {sapSession.status}</>
+              )}
+            </span>
           </span>
+
+          {/* Admin Navigation Button (Only visible for admin role) */}
+          {user.role === 'admin' && (
+            <button
+              type="button"
+              className={`sap-btn ${activeTab === 'admin' ? 'sap-btn-primary' : 'sap-btn-ghost'} sap-admin-nav-btn`}
+              onClick={() => setActiveTab(activeTab === 'admin' ? 'launchpad' : 'admin')}
+              title="Enterprise Administration & Permissions"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                height: 32,
+                padding: '0 12px',
+                borderRadius: 'var(--radius-md)',
+                fontWeight: 600,
+                background: activeTab === 'admin' ? 'var(--sap-admin-pill-bg)' : 'rgba(255,255,255,0.08)',
+                color: 'var(--sap-shell-text)',
+                border: '1px solid rgba(255,255,255,0.18)'
+              }}
+            >
+              <ShieldCheck size={15} />
+              <span className="sap-header-btn-text">Admin</span>
+            </button>
+          )}
 
           {/* Logout Button */}
           <button
             type="button"
             className="sap-btn sap-btn-ghost sap-logout-btn"
-            onClick={handleLogout}
-            title="End session and log out"
+            onClick={handleOpenLogoutModal}
+            title={`Signed in as ${user.email} (${user.role}). Click to log out.`}
           >
             <LogOut size={15} />
-            <span>Logout</span>
+            <span className="sap-header-btn-text">Logout</span>
           </button>
         </div>
 
@@ -376,66 +567,33 @@ export default function App() {
         {isMobileMenuOpen && (
           <div className="sap-mobile-dropdown">
             <div className="sap-mobile-user-info">
-              <User size={16} color="#94a3b8" />
-              <span>Signed in as <strong>{sapSession.selectedUser || sapSession.user || user.username}</strong></span>
-              <span
-                className={`sap-session-pill status-${(sapSession.status || 'checking').toLowerCase()} ${
-                  sapSession.code === 'SELECTED_SESSION_UNAVAILABLE' ? 'status-selected_session_unavailable' : ''
-                }`}
-                style={{ marginLeft: 'auto', fontSize: '10px', padding: '2px 8px' }}
-                title={sapSession.message || `SAP Status: ${sapSession.status}`}
-              >
-                <span className={`sap-status-dot dot-${(sapSession.status || 'checking').toLowerCase()}`}></span>
-                {sapSession.code === 'SELECTED_SESSION_UNAVAILABLE' ? 'SESSION DISCONNECTED' : sapSession.status === 'CONNECTED' ? 'CONNECTED' : sapSession.status === 'BUSY' ? 'BUSY' : sapSession.status === 'SERVER_UNAVAILABLE' ? 'SERVER UNAVAIL' : 'DISCONNECTED'}
-              </span>
+              <User size={16} color="var(--sap-text-subtle)" />
+              <span>Signed in as <strong>{user.email}</strong> ({user.role})</span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px' }}>
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>System:</span>
-              <select
-                value={currentSystem}
-                onChange={(e) => setCurrentSystem(e.target.value)}
-                className={`sap-system-select ${currentSystem === 'PROD' ? 'prod' : ''}`}
-                style={{ flex: 1 }}
-              >
-                <option value="DEV">DEV (Sandbox)</option>
-                <option value="QA">QA (Quality)</option>
-                <option value="PROD">PROD (Production)</option>
-              </select>
-            </div>
-
-            {/* Mobile Session Selector */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>SAP GUI Session:</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {sapSession.sessions && sapSession.sessions.length > 0 ? (
-                  sapSession.sessions.map((sess) => {
-                    const isSelected = sess.id === sapSession.selectedSessionId || sess.selected;
-                    return (
-                      <button
-                        key={sess.id}
-                        type="button"
-                        className={`sap-session-item ${isSelected ? 'selected' : ''}`}
-                        onClick={() => handleSelectSession(sess.id)}
-                        disabled={isSwitchingSession}
-                        style={{ padding: '6px 10px', fontSize: '12px', textAlign: 'left' }}
-                      >
-                        <span className="sap-session-radio">{isSelected ? '●' : '○'}</span>
-                        <span style={{ fontWeight: 600, color: '#f8fafc' }}>{sess.user}</span>
-                        <span style={{ color: '#94a3b8', fontSize: '11px' }}>({sess.system}/{sess.client})</span>
-                        {isSelected && <span className="sap-session-active-pill" style={{ marginLeft: 'auto' }}>Active</span>}
-                      </button>
-                    );
-                  })
-                ) : (
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>No active sessions</span>
-                )}
-              </div>
+              <span style={{ fontSize: '12px', color: 'var(--sap-text-subtle)' }}>Server:</span>
+              {availableServers.length > 1 ? (
+                <select
+                  value={selectedServer?.id || ''}
+                  onChange={(e) => handleServerChange(e.target.value)}
+                  className={`sap-system-select ${selectedServer?.environment === 'PROD' ? 'prod' : ''}`}
+                  style={{ flex: 1 }}
+                >
+                  {availableServers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.environment})</option>
+                  ))}
+                </select>
+              ) : (
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--sap-shell-text)' }}>
+                  {selectedServer?.name || 'No Servers'}
+                </span>
+              )}
             </div>
 
             {/* Mobile Navigation Tabs */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>Applications:</span>
+              <span style={{ fontSize: '12px', color: 'var(--sap-text-subtle)' }}>Applications:</span>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 <button
                   type="button"
@@ -450,51 +608,49 @@ export default function App() {
                   <LayoutGrid size={14} />
                   <span>Launchpad</span>
                 </button>
-                <button
-                  type="button"
-                  className={`sap-btn sap-btn-secondary ${activeTab === 'copy_bom' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('copy_bom'); setIsMobileMenuOpen(false); }}
-                  style={{ fontSize: '12px', padding: '6px' }}
-                >
-                  <Copy size={14} />
-                  <span>Copy BOM</span>
-                </button>
-                <button
-                  type="button"
-                  className={`sap-btn sap-btn-secondary ${activeTab === 'bulk_bom' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('bulk_bom'); setIsMobileMenuOpen(false); }}
-                  style={{ fontSize: '12px', padding: '6px' }}
-                >
-                  <FileSpreadsheet size={14} />
-                  <span>Bulk Copy</span>
-                </button>
-                <button
-                  type="button"
-                  className={`sap-btn sap-btn-secondary ${activeTab === 'delete_bom' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('delete_bom'); setIsMobileMenuOpen(false); }}
-                  style={{ fontSize: '12px', padding: '6px' }}
-                >
-                  <Trash2 size={14} />
-                  <span>Delete BOM</span>
-                </button>
-                <button
-                  type="button"
-                  className={`sap-btn sap-btn-secondary ${activeTab === 'bom_explorer' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('bom_explorer'); setIsMobileMenuOpen(false); }}
-                  style={{ fontSize: '12px', padding: '6px' }}
-                >
-                  <Search size={14} />
-                  <span>Explorer</span>
-                </button>
-                <button
-                  type="button"
-                  className={`sap-btn sap-btn-secondary ${activeTab === 'validate_bom' ? 'active' : ''}`}
-                  onClick={() => { setActiveTab('validate_bom'); setIsMobileMenuOpen(false); }}
-                  style={{ fontSize: '12px', padding: '6px' }}
-                >
-                  <ShieldCheck size={14} />
-                  <span>Validate BOM</span>
-                </button>
+
+                {/* Dynamic Mobile Shortcuts from Enabled Modules */}
+                {MODULE_REGISTRY
+                  .filter((mod) => enabledModules.includes(mod.key))
+                  .flatMap((mod) => mod.subApps || [])
+                  .map((op) => {
+                    const iconMap = {
+                      Search,
+                      Eye,
+                      Copy,
+                      FileSpreadsheet,
+                      ShieldCheck,
+                      Trash2
+                    };
+                    const Icon = iconMap[op.iconName] || Search;
+                    return (
+                      <button
+                        key={op.action}
+                        type="button"
+                        className={`sap-btn sap-btn-secondary ${activeTab === op.action ? 'active' : ''}`}
+                        onClick={() => {
+                          setActiveTab(op.action);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        style={{ fontSize: '12px', padding: '6px' }}
+                      >
+                        <Icon size={14} />
+                        <span>{op.title}</span>
+                      </button>
+                    );
+                  })}
+
+                {user.role === 'admin' && (
+                  <button
+                    type="button"
+                    className={`sap-btn sap-btn-secondary ${activeTab === 'admin' ? 'active' : ''}`}
+                    onClick={() => { setActiveTab('admin'); setIsMobileMenuOpen(false); }}
+                    style={{ fontSize: '12px', padding: '6px', gridColumn: 'span 2', background: 'var(--sap-admin-pill-bg)', color: 'var(--sap-admin-pill-text)' }}
+                  >
+                    <ShieldCheck size={14} />
+                    <span>Admin Panel</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -503,9 +659,9 @@ export default function App() {
               className="sap-btn sap-btn-secondary sap-mobile-action-btn"
               onClick={() => {
                 setIsMobileMenuOpen(false);
-                handleLogout();
+                handleOpenLogoutModal();
               }}
-              style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+              style={{ color: 'var(--sap-error)', borderColor: 'var(--sap-error-border)' }}
             >
               <LogOut size={16} />
               <span>Log Out</span>
@@ -523,10 +679,69 @@ export default function App() {
             subView={launchpadSubView}
             onSubViewChange={setLaunchpadSubView}
             onOpenAction={(action) => setActiveTab(action)}
+            enabledModules={enabledModules}
+            userRole={user.role}
+            selectedGroup={selectedHomeGroup}
+            onSelectGroup={setSelectedHomeGroup}
           />
         )}
 
-        {activeTab === 'copy_bom' && (
+        {/* Module Guard: Render "Not available for this server" if navigating to an unenabled module */}
+        {activeTab !== 'launchpad' && activeTab !== 'admin' && getModuleKeyForAction(activeTab) && !enabledModules.includes(getModuleKeyForAction(activeTab)) && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '60px 24px',
+              textAlign: 'center',
+              maxWidth: 520,
+              margin: '60px auto',
+              background: 'var(--sap-card-bg)',
+              borderRadius: 'var(--radius-xl)',
+              border: '1px solid var(--sap-border-subtle)',
+              boxShadow: 'var(--sap-shadow-md)'
+            }}
+          >
+            <div
+              style={{
+                width: 60,
+                height: 60,
+                borderRadius: 'var(--radius-full)',
+                background: 'var(--sap-error-bg)',
+                color: 'var(--sap-error)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16
+              }}
+            >
+              <ShieldCheck size={30} />
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--sap-text-dark)', margin: '0 0 8px' }}>
+              Not Available For This Server
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--sap-text-muted)', margin: '0 0 20px', lineHeight: 1.5 }}>
+              This module is not enabled for{' '}
+              <strong>{selectedServer?.name || 'this server'}</strong>.
+              Please switch to another server or contact an administrator to enable access.
+            </p>
+            <button
+              type="button"
+              className="sap-btn sap-btn-primary"
+              onClick={() => {
+                setActiveTab('launchpad');
+                setLaunchpadSubView('home');
+              }}
+              style={{ padding: '8px 18px', fontSize: 13 }}
+            >
+              Return to Launchpad
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'copy_bom' && (!getModuleKeyForAction('copy_bom') || enabledModules.includes(getModuleKeyForAction('copy_bom'))) && (
           <CopyBomView
             systemKey={currentSystem}
             onBack={() => {
@@ -540,7 +755,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'bulk_bom' && (
+        {activeTab === 'bulk_bom' && (!getModuleKeyForAction('bulk_bom') || enabledModules.includes(getModuleKeyForAction('bulk_bom'))) && (
           <BulkBomView
             systemKey={currentSystem}
             onBack={() => {
@@ -554,7 +769,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'delete_bom' && (
+        {activeTab === 'delete_bom' && (!getModuleKeyForAction('delete_bom') || enabledModules.includes(getModuleKeyForAction('delete_bom'))) && (
           <DeleteBomView
             systemKey={currentSystem}
             onBack={() => {
@@ -568,7 +783,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'bom_explorer' && (
+        {activeTab === 'bom_explorer' && (!getModuleKeyForAction('bom_explorer') || enabledModules.includes(getModuleKeyForAction('bom_explorer'))) && (
           <BomExplorerView
             systemKey={currentSystem}
             onBack={() => {
@@ -582,7 +797,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'validate_bom' && (
+        {activeTab === 'validate_bom' && (!getModuleKeyForAction('validate_bom') || enabledModules.includes(getModuleKeyForAction('validate_bom'))) && (
           <ValidateBomView
             systemKey={currentSystem}
             onBack={() => {
@@ -595,7 +810,69 @@ export default function App() {
             }}
           />
         )}
+
+        {activeTab === 'admin' && (
+          <AdminView
+            currentUser={user}
+            onBack={() => setActiveTab('launchpad')}
+            onNavigateHome={() => setActiveTab('launchpad')}
+          />
+        )}
       </main>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        isOpen={isLogoutModalOpen}
+        onClose={handleCloseLogoutModal}
+        title="Log out?"
+        icon={LogOut}
+        isLoading={isLoggingOut}
+        maxWidth={420}
+      >
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--sap-text-body)', lineHeight: 1.5 }}>
+          Are you sure you want to log out?
+        </p>
+
+        {hasInterruptionRisk && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 12px',
+              marginBottom: 16,
+              background: 'var(--sap-warning-bg, #fffbeb)',
+              border: '1px solid var(--sap-warning-border, #fde68a)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--sap-warning-text, #b45309)',
+              fontSize: 12.5,
+              lineHeight: 1.4
+            }}
+          >
+            <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+            <span>A running operation may be interrupted.</span>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
+          <button
+            type="button"
+            className="sap-btn sap-btn-secondary"
+            onClick={handleCloseLogoutModal}
+            disabled={isLoggingOut}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="sap-btn sap-btn-primary"
+            onClick={handleConfirmLogout}
+            disabled={isLoggingOut}
+          >
+            {isLoggingOut ? 'Logging out...' : 'Log out'}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

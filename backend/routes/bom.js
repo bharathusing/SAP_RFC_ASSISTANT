@@ -9,19 +9,31 @@ import {
   rfcDeleteBom,
   rfcBatchValidateBoms,
   rfcBatchCopyBoms,
+  rfcGetBomDisplayData,
+  verifyCopiedBomHierarchy,
   pingRfcServer
 } from '../services/sapRfcClient.js';
 import { validateSourceBom as validateSourceBomGui } from '../services/sapGuiClient.js';
+import { requireAuth, requireServerAccess, requireModuleAccess } from '../middleware/auth.js';
+import { MODULE_KEYS } from '../config/modules.js';
+import { auditLogger } from '../services/auditLog.js';
 
 const router = express.Router();
 
+// Enforce authentication and BOM module enablement on all BOM routes
+router.use(requireAuth);
+router.use(requireModuleAccess(MODULE_KEYS.BOM));
+
 /**
  * GET /api/bom/ping
- * Checks RFC connectivity to SAP.
+ * Checks RFC connectivity to SAP on permitted server.
  */
-router.get('/ping', async (req, res) => {
+router.get('/ping', requireServerAccess('read_only'), async (req, res) => {
   try {
-    const pingResult = await pingRfcServer();
+    const pingResult = await pingRfcServer(req.selectedServer || {});
+    if (!pingResult.success) {
+      return res.status(500).json(pingResult);
+    }
     return res.status(200).json(pingResult);
   } catch (err) {
     return res.status(500).json({
@@ -36,7 +48,7 @@ router.get('/ping', async (req, res) => {
  * Validates a source / reference BOM in SAP via fast RFC (CSAP_MAT_BOM_READ)
  * or fallback GUI Scripting.
  */
-router.post('/validate-source', async (req, res) => {
+router.post('/validate-source', requireServerAccess('read_only'), async (req, res) => {
   try {
     const { material, plant, bomUsage, alternativeBom } = req.body || {};
 
@@ -64,7 +76,8 @@ router.post('/validate-source', async (req, res) => {
         material,
         plant,
         bomUsage,
-        alternativeBom
+        alternativeBom,
+        server: req.selectedServer
       });
     } else {
       result = await validateSourceBomGui({
@@ -88,16 +101,18 @@ router.post('/validate-source', async (req, res) => {
 
 /**
  * POST /api/bom/read
- * Reads BOM header and items via CSAP_MAT_BOM_READ.
+ * Serves Single Level Display BOM for BOM Hierarchy Explorer.
  */
-router.post('/read', async (req, res) => {
+router.post('/read', requireServerAccess('read_only'), async (req, res) => {
   try {
     const { material, plant, bomUsage, alternativeBom } = req.body || {};
-    const result = await rfcReadBom({
+    const result = await rfcGetBomDisplayData({
       material,
       plant,
       bomUsage,
-      alternativeBom
+      alternativeBom,
+      multiLevel: false,
+      server: req.selectedServer
     });
     return res.status(200).json(result);
   } catch (err) {
@@ -110,9 +125,9 @@ router.post('/read', async (req, res) => {
 
 /**
  * POST /api/bom/create
- * Creates a Material BOM via CSAP_MAT_BOM_CREATE.
+ * Creates a Material BOM via CSAP_MAT_BOM_CREATE (Requires read_write permission).
  */
-router.post('/create', async (req, res) => {
+router.post('/create', requireServerAccess('read_write'), async (req, res) => {
   try {
     const { material, plant, bomUsage, alternativeBom, validFrom, components } = req.body || {};
     const result = await rfcCreateBom({
@@ -121,8 +136,23 @@ router.post('/create', async (req, res) => {
       bomUsage,
       alternativeBom,
       validFrom,
-      components
+      components,
+      server: req.selectedServer
     });
+
+    if (result.success) {
+      auditLogger.logAction({
+        user: req.user.email,
+        sapUsername: req.user.email,
+        system: req.selectedServer?.name || 'SAP-BOM',
+        actionType: 'create',
+        entityKey: 'bom',
+        recordId: `${material}/${plant}`,
+        task: `Create BOM ${material} in plant ${plant}`,
+        afterValues: { material, plant, bomUsage, alternativeBom, componentCount: components?.length || 0 }
+      });
+    }
+
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({
@@ -134,16 +164,18 @@ router.post('/create', async (req, res) => {
 
 /**
  * POST /api/bom/hierarchy
- * Explodes and returns the full multi-level BOM hierarchy.
+ * Serves Multi-Level component tree for BOM Hierarchy Explorer.
  */
-router.post('/hierarchy', async (req, res) => {
+router.post('/hierarchy', requireServerAccess('read_only'), async (req, res) => {
   try {
     const { material, plant, bomUsage, alternativeBom } = req.body || {};
-    const result = await rfcExplodeBomHierarchy({
+    const result = await rfcGetBomDisplayData({
       material,
       plant,
       bomUsage,
-      alternativeBom
+      alternativeBom,
+      multiLevel: true,
+      server: req.selectedServer
     });
     return res.status(200).json(result);
   } catch (err) {
@@ -156,9 +188,9 @@ router.post('/hierarchy', async (req, res) => {
 
 /**
  * POST /api/bom/copy
- * Copies a BOM from source to target in <200ms using CSAP RFCs, including full hierarchy.
+ * Copies a BOM from source to target (Requires read_write permission).
  */
-router.post('/copy', async (req, res) => {
+router.post('/copy', requireServerAccess('read_write'), async (req, res) => {
   try {
     const {
       sourceMaterial,
@@ -181,8 +213,23 @@ router.post('/copy', async (req, res) => {
       alternativeBom,
       sourceAlternative,
       targetAlternative,
-      copyHierarchy
+      copyHierarchy,
+      server: req.selectedServer
     });
+
+    if (result.success) {
+      auditLogger.logAction({
+        user: req.user.email,
+        sapUsername: req.user.email,
+        system: req.selectedServer?.name || 'SAP-BOM',
+        actionType: 'copy',
+        entityKey: 'bom',
+        recordId: `${targetMaterial}/${targetPlant}`,
+        task: `Copy BOM from ${sourceMaterial}(${sourcePlant}) to ${targetMaterial}(${targetPlant})`,
+        afterValues: { sourceMaterial, sourcePlant, targetMaterial, targetPlant, targetAlternative }
+      });
+    }
+
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({
@@ -193,18 +240,97 @@ router.post('/copy', async (req, res) => {
 });
 
 /**
- * POST /api/bom/delete
- * Deletes a BOM via CSAP_MAT_BOM_DELETE.
+ * POST /api/bom/verify-copy
+ * Reads created target hierarchy back from SAP and strictly verifies against source hierarchy.
  */
-router.post('/delete', async (req, res) => {
+router.post('/verify-copy', requireServerAccess('read_only'), async (req, res) => {
+  try {
+    const {
+      sourceMaterial,
+      sourcePlant,
+      sourceUsage,
+      sourceAlternative,
+      targetMaterial,
+      targetPlant,
+      targetUsage,
+      targetAlternative
+    } = req.body || {};
+
+    const result = await verifyCopiedBomHierarchy({
+      sourceMaterial,
+      sourcePlant,
+      sourceUsage,
+      sourceAlternative,
+      targetMaterial,
+      targetPlant,
+      targetUsage,
+      targetAlternative,
+      server: req.selectedServer
+    });
+
+    auditLogger.logAction({
+      user: req.user?.email || 'SYSTEM',
+      sapUsername: req.user?.email || 'SYSTEM',
+      system: req.selectedServer?.name || 'SAP-BOM',
+      actionType: 'verify_copy',
+      entityKey: 'bom',
+      recordId: `${targetMaterial}/${targetPlant}`,
+      task: `Post-copy BOM hierarchy verification for ${targetMaterial} in plant ${targetPlant}`,
+      result: result.status || (result.success ? 'SUCCESS' : 'FAILED'),
+      afterValues: {
+        sourceMaterial,
+        sourcePlant,
+        targetMaterial,
+        targetPlant,
+        rootAlternative: result.rootAlternative,
+        bomsCreated: result.bomsCreated,
+        totalComponents: result.totalComponents,
+        verifiedCount: result.verification?.verifiedCount,
+        totalCount: result.verification?.totalCount,
+        status: result.status,
+        differences: result.verification?.differences || []
+      }
+    });
+
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[bom.js] verify-copy error:', err.message);
+    return res.status(500).json({
+      success: false,
+      status: 'FAILED',
+      message: `Failed to verify copied BOM: ${err.message}`
+    });
+  }
+});
+
+/**
+ * POST /api/bom/delete
+ * Deletes a BOM via CSAP_MAT_BOM_DELETE (Requires read_write permission).
+ */
+router.post('/delete', requireServerAccess('read_write'), async (req, res) => {
   try {
     const { material, plant, bomUsage, alternativeBom } = req.body || {};
     const result = await rfcDeleteBom({
       material,
       plant,
       bomUsage,
-      alternativeBom
+      alternativeBom,
+      server: req.selectedServer
     });
+
+    if (result.success) {
+      auditLogger.logAction({
+        user: req.user.email,
+        sapUsername: req.user.email,
+        system: req.selectedServer?.name || 'SAP-BOM',
+        actionType: 'delete',
+        entityKey: 'bom',
+        recordId: `${material}/${plant}`,
+        task: `Delete BOM ${material} in plant ${plant}`,
+        afterValues: { material, plant, bomUsage, alternativeBom }
+      });
+    }
+
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({
@@ -216,9 +342,9 @@ router.post('/delete', async (req, res) => {
 
 /**
  * POST /api/bom/batch-validate
- * Validates an array of BOM copy requests against SAP (checks source existence and target availability).
+ * Validates an array of BOM copy requests against SAP on permitted server.
  */
-router.post('/batch-validate', async (req, res) => {
+router.post('/batch-validate', requireServerAccess('read_only'), async (req, res) => {
   try {
     const { items = [] } = req.body || {};
     const result = await rfcBatchValidateBoms(items);
@@ -234,12 +360,24 @@ router.post('/batch-validate', async (req, res) => {
 
 /**
  * POST /api/bom/batch-copy
- * Executes batch BOM copy sequentially with row-level error isolation.
+ * Executes batch BOM copy sequentially (Requires read_write permission).
  */
-router.post('/batch-copy', async (req, res) => {
+router.post('/batch-copy', requireServerAccess('read_write'), async (req, res) => {
   try {
     const { items = [], skipErrors = true, copyHierarchy = true } = req.body || {};
-    const result = await rfcBatchCopyBoms(items, { skipErrors, copyHierarchy });
+    const result = await rfcBatchCopyBoms(items, { skipErrors, copyHierarchy, server: req.selectedServer });
+
+    auditLogger.logAction({
+      user: req.user.email,
+      sapUsername: req.user.email,
+      system: req.selectedServer?.name || 'SAP-BOM',
+      actionType: 'batch_copy',
+      entityKey: 'bom',
+      recordId: `Batch-${items.length}`,
+      task: `Batch copied ${items.length} BOMs`,
+      afterValues: { total: items.length, successful: result.successfulCount || 0 }
+    });
+
     return res.status(200).json(result);
   } catch (err) {
     console.error('[bom.js] batch-copy error:', err.message);
@@ -254,7 +392,7 @@ router.post('/batch-copy', async (req, res) => {
  * GET /api/bom/template
  * Generates and downloads the official Excel template for Bulk BOM Copy.
  */
-router.get('/template', (req, res) => {
+router.get('/template', requireServerAccess('read_only'), (req, res) => {
   try {
     const wb = XLSX.utils.book_new();
     const sampleData = [

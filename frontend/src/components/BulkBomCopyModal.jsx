@@ -18,6 +18,7 @@ import {
   FileCheck
 } from 'lucide-react';
 import { batchValidateBoms, batchCopyBoms, downloadBomTemplate } from '../services/api';
+import Modal from './Modal';
 
 /**
  * Normalizes headers from Excel spreadsheet into recognized internal keys.
@@ -106,10 +107,8 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
   };
 
   const handleClose = () => {
-    if (isExecuting) {
-      if (!window.confirm('Batch copy is currently in progress. Are you sure you want to close?')) {
-        return;
-      }
+    if (isExecuting || isValidating) {
+      return;
     }
     resetAll();
     onClose();
@@ -380,13 +379,21 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
   const errorCount = parsedRows.filter((r) => r.status === 'ERROR' || r.status === 'FAILED').length;
 
   return (
-    <div className="sap-bulk-modal-overlay">
-      <div className="sap-bulk-modal-container">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      customLayout={true}
+      maxWidth={960}
+      isLoading={isExecuting || isValidating}
+      cardClassName="sap-bulk-modal-container"
+      padding="0"
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         {/* Header */}
         <div className="sap-bulk-modal-header">
           <div className="sap-bulk-modal-title">
             <div className="sap-bulk-icon-badge">
-              <FileSpreadsheet size={16} color="#0070f2" />
+              <FileSpreadsheet size={16} color="var(--sap-primary)" />
             </div>
             <div>
               <h3>Bulk BOM Copy via Excel</h3>
@@ -397,7 +404,14 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
             type="button"
             className="sap-modal-close-btn"
             onClick={handleClose}
-            title="Close dialog"
+            disabled={isExecuting || isValidating}
+            style={{
+              opacity: (isExecuting || isValidating) ? 0.35 : 1,
+              pointerEvents: (isExecuting || isValidating) ? 'none' : 'auto',
+              cursor: (isExecuting || isValidating) ? 'not-allowed' : 'pointer'
+            }}
+            title={(isExecuting || isValidating) ? 'Operation in progress' : 'Close dialog'}
+            aria-label="Close dialog"
           >
             <X size={15} />
           </button>
@@ -453,7 +467,7 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
                   }}
                 />
                 <div className="dropzone-icon">
-                  <Upload size={22} color="#0070f2" />
+                  <Upload size={22} color="var(--sap-primary)" />
                 </div>
                 <h4>Drag & drop Excel or CSV file here</h4>
                 <p>Supports .xlsx, .xls, and .csv with Source & Target BOM columns</p>
@@ -506,7 +520,7 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
               {/* File Info Bar */}
               <div className="sap-bulk-file-info-bar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <FileCheck size={18} color="#107e3e" />
+                  <FileCheck size={18} color="var(--sap-success)" />
                   <span style={{ fontWeight: 600, color: 'var(--sap-text)' }}>{file?.name}</span>
                   <span className="sap-badge-count">{parsedRows.length} rows loaded</span>
                 </div>
@@ -549,7 +563,7 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
                     <span>{errorCount} Errors</span>
                   </div>
                   <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <label style={{ fontSize: '12px', color: '#166534', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', background: '#dcfce7', padding: '3px 8px', borderRadius: 5 }}>
+                    <label style={{ fontSize: '12px', color: 'var(--sap-success-text)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', background: 'var(--sap-success-bg)', border: '1px solid var(--sap-success-border)', padding: '3px 8px', borderRadius: 'var(--radius-sm)' }}>
                       <input
                         type="checkbox"
                         checked={copyHierarchy}
@@ -572,7 +586,7 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
               )}
 
               {/* Grid Preview Table */}
-              <div className="sap-bulk-grid-container">
+              <div className="sap-bulk-grid-container" tabIndex={0} role="region" aria-label="Bulk BOM Items Preview Table">
                 <table className="sap-bulk-table">
                   <thead>
                     <tr>
@@ -602,14 +616,14 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
                           <td>
                             <div className="bom-identity-cell">
                               <span className="mat-pill">{row.targetMaterial}</span>
-                              <span className="sub-detail">Plant: <strong>{row.targetPlant}</strong> | Usage: {row.targetUsage} | Alt: <strong style={{ color: '#0070f2' }}>{row.targetAltBom}</strong></span>
+                              <span className="sub-detail">Plant: <strong>{row.targetPlant}</strong> | Usage: {row.targetUsage} | Alt: <strong style={{ color: 'var(--sap-primary)' }}>{row.targetAltBom}</strong></span>
                             </div>
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             {row.componentCount !== undefined && row.componentCount > 0 ? (
                               <span className="comp-count-badge">{row.componentCount} items</span>
                             ) : (
-                              <span style={{ color: '#94a3b8' }}>-</span>
+                              <span style={{ color: 'var(--sap-text-subtle)' }}>-</span>
                             )}
                           </td>
                           <td>
@@ -663,7 +677,7 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
               type="button"
               className="sap-btn sap-btn-ghost"
               onClick={handleClose}
-              disabled={isExecuting}
+              disabled={isExecuting || isValidating}
             >
               {executionReport ? 'Close' : 'Cancel'}
             </button>
@@ -712,6 +726,6 @@ export default function BulkBomCopyModal({ isOpen, onClose, onExecutionComplete 
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

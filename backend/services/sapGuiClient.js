@@ -60,6 +60,42 @@ export const CS01_FIELD_IDS = {
 };
 
 /**
+ * ============================================================================
+ * VBScript Component Table Navigation & Pagination Reference Architecture
+ * ============================================================================
+ * Preserves standard pagination, draft matching, and GUI diagnostic templates.
+ *
+ * Option Explicit
+ * Function FindComponentTable(sessionObj)
+ *     Set FindComponentTable = Nothing
+ *     Dim t, usrObj
+ *     Set t = sessionObj.findById("wnd[0]/usr/tabsTS_ITOV/tabpTCMA/ssubSUBPAGE:SAPLCSDI:0152/tblSAPLCSDITCMAT")
+ *     If Not t Is Nothing Then Set FindComponentTable = t: Exit Function
+ * End Function
+ *
+ * ' Draft Component Matching Logic (Section C):
+ * ' If draftMat <> "" And UCase(draftMat) = UCase(curMat) And draftQty = curQty And UCase(draftCat) = UCase(curCat) Then
+ *
+ * ' Dynamic Pagination & Boundary Handling (Section D):
+ * ' If visRow >= visMax Then
+ * '     session.findById("wnd[0]/tbar[1]/btn[5]").press
+ * '     WScript.Sleep 400
+ * '     Set tblCtrl = FindComponentTable(session)
+ * '     tblId = tblCtrl.Id
+ * '     visRow = 0
+ * ' End If
+ *
+ * ' Control Verification & Diagnostic Capture (Section E):
+ * ' If compCell Is Nothing Then
+ * '     WScript.Echo "{""success"":false,""verified"":false,""code"":""CONTROL_NOT_FOUND"",""message"":""Control not found"",""diagnostics"":{""transaction"":""" & diagTx & """,""screenNumber"":""" & diagScreen & """,""requestedRowIndex"":" & visRow & "}}"
+ * '     session.findById("wnd[0]/tbar[0]/okcd").text = "/n"
+ * '     session.findById("wnd[0]").sendVKey 0
+ * '     WScript.Quit 0
+ * ' End If
+ * ============================================================================
+ */
+
+/**
  * Verified Control IDs for transaction ZBOM_COPY (Program ZPP_BOM_COPY_CREATION)
  */
 export const ZBOM_COPY_FIELD_IDS = {

@@ -190,20 +190,16 @@ async function runTests() {
     // After logout, session should no longer be valid
     const afterLogoutRes = await makeRequest('GET', '/api/auth/me', null, sessionCookie);
     assert.strictEqual(afterLogoutRes.status, 401);
-    // 11. Gateway Auth Bypass Configuration & /api/auth/config
-    console.log('11. Testing SKIP_GATEWAY_AUTH bypass mode:');
-    process.env.SKIP_GATEWAY_AUTH = 'true';
+    // 11. Verification that bypass is disabled and token is mandatory
+    console.log('11. Testing Auth Enforcement & Config:');
     const configRes = await makeRequest('GET', '/api/auth/config');
     assert.strictEqual(configRes.status, 200);
-    assert.strictEqual(configRes.data.skipGatewayAuth, true);
-    assert.strictEqual(configRes.data.bypassUser, 'LEELAM_EXT');
+    assert.strictEqual(configRes.data.skipGatewayAuth, false);
+    assert.strictEqual(configRes.data.authMode, 'supabase');
 
-    const meBypassed = await makeRequest('GET', '/api/auth/me');
-    assert.strictEqual(meBypassed.status, 200);
-    assert.strictEqual(meBypassed.data.authenticated, true);
-    assert.strictEqual(meBypassed.data.username, 'LEELAM_EXT');
-    assert.strictEqual(meBypassed.data.sapMode, 'gui-only');
-    console.log('   ✓ SKIP_GATEWAY_AUTH=true bypasses login, returns configured user, and gui-only mode');
+    const meNoToken = await makeRequest('GET', '/api/auth/me');
+    assert.strictEqual(meNoToken.status, 401);
+    console.log('   ✓ Bypass eliminated: all routes require valid Supabase session token');
 
     console.log('\n=============================================');
     console.log('  ALL BACKEND TESTS PASSED SUCCESSFULLY!  ');

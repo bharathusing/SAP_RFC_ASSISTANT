@@ -53,5 +53,134 @@
         "unit": "EA"
       }
     ]
+  },
+  {
+    "material": "A1BH0214C",
+    "plant": "1012",
+    "bomUsage": "1",
+    "alternativeBom": "01",
+    "bomNumber": "00785396",
+    "baseQty": "100",
+    "baseUnit": "PAA",
+    "validFrom": "20240115",
+    "description": "Athletic Footwear Model 214 Production BOM",
+    "components": [
+      {
+        "item": "0010",
+        "itemCategory": "L",
+        "component": "000000000011021735",
+        "description": "Rubber Sole Compound 42",
+        "quantity": 0.017,
+        "unit": "KG",
+        "validFrom": "20240115"
+      },
+      {
+        "item": "0020",
+        "itemCategory": "L",
+        "component": "000000000011021733",
+        "description": "Outer Shell Polyurethane",
+        "quantity": 0.015,
+        "unit": "KG",
+        "validFrom": "20240115"
+      },
+      {
+        "item": "0030",
+        "itemCategory": "L",
+        "component": "000000000011021734",
+        "description": "",
+        "quantity": 0.002,
+        "unit": "KG",
+        "validFrom": "20240115"
+      },
+      {
+        "item": "0040",
+        "itemCategory": "L",
+        "component": "000000000011021736",
+        "description": "Inner Cushion Sub-Assembly",
+        "quantity": 1,
+        "unit": "ST",
+        "validFrom": "20240115"
+      }
+    ]
+  },
+  {
+    "material": "A1BNJ214C",
+    "plant": "1012",
+    "bomUsage": "1",
+    "alternativeBom": "01",
+    "bomNumber": "00785396",
+    "baseQty": "100",
+    "baseUnit": "PAA",
+    "validFrom": "20240115",
+    "description": "Athletic Footwear Model 214 Production BOM",
+    "components": [
+      {
+        "item": "0010",
+        "itemCategory": "L",
+        "component": "000000000011021735",
+        "description": "Rubber Sole Compound 42",
+        "quantity": 0.017,
+        "unit": "KG",
+        "validFrom": "20240115"
+      },
+      {
+        "item": "0020",
+        "itemCategory": "L",
+        "component": "000000000011021733",
+        "description": "Outer Shell Polyurethane",
+        "quantity": 0.015,
+        "unit": "KG",
+        "validFrom": "20240115"
+      },
+      {
+        "item": "0030",
+        "itemCategory": "L",
+        "component": "000000000011021734",
+        "description": "",
+        "quantity": 0.002,
+        "unit": "KG",
+        "validFrom": "20240115"
+      },
+      {
+        "item": "0040",
+        "itemCategory": "L",
+        "component": "000000000011021736",
+        "description": "Inner Cushion Sub-Assembly",
+        "quantity": 1,
+        "unit": "ST",
+        "validFrom": "20240115"
+      }
+    ]
+  },
+  {
+    "material": "000000000011021736",
+    "plant": "1012",
+    "bomUsage": "1",
+    "alternativeBom": "01",
+    "bomNumber": "00785397",
+    "baseQty": "1",
+    "baseUnit": "ST",
+    "validFrom": "20240201",
+    "description": "Inner Cushion Sub-Assembly",
+    "components": [
+      {
+        "item": "0010",
+        "itemCategory": "L",
+        "component": "000000000011022139",
+        "description": "High Density Foam Insert",
+        "quantity": 0.001,
+        "unit": "KG",
+        "validFrom": "20240201"
+      },
+      {
+        "item": "0020",
+        "itemCategory": "L",
+        "component": "000000000011022154",
+        "description": "Mesh Lining Fabric",
+        "quantity": 0.1,
+        "unit": "L",
+        "validFrom": "20240201"
+      }
+    ]
   }
 ]

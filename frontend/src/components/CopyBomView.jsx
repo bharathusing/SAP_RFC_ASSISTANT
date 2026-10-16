@@ -1,20 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
   ChevronLeft,
   Copy,
   CheckCircle2,
   AlertTriangle,
-  Layers,
-  FileCheck,
-  RefreshCw,
-  Clock,
-  ShieldCheck,
-  Check
+  ShieldCheck
 } from 'lucide-react';
 import CreateBomForm from './CreateBomForm';
 import ConfirmationCard from './ConfirmationCard';
-import { sendChatMessage, confirmChatAction, cancelChatAction } from '../services/api';
+import { sendChatMessage, confirmChatAction, cancelChatAction, verifyCopiedBom } from '../services/api';
+import activityTracker from '../services/activityTracker';
 
 export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome }) {
   const [proposedAction, setProposedAction] = useState(null);
@@ -24,10 +20,30 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSubmittedForm, setLastSubmittedForm] = useState(null);
 
+  // Background Verification State
+  const [isReadingBack, setIsReadingBack] = useState(false);
+  const [verifiedData, setVerifiedData] = useState(null);
+  const [readBackError, setReadBackError] = useState('');
+  const [showDiscrepancies, setShowDiscrepancies] = useState(false);
+
+  useEffect(() => {
+    activityTracker.setOperation('copy_bom', isSubmitting || actionStatus === 'executing');
+    return () => activityTracker.setOperation('copy_bom', false);
+  }, [isSubmitting, actionStatus]);
+
+  useEffect(() => {
+    const isPending = Boolean(proposedAction && actionStatus === 'pending');
+    activityTracker.setConfirmation('copy_bom', isPending);
+    return () => activityTracker.setConfirmation('copy_bom', false);
+  }, [proposedAction, actionStatus]);
+
   const handleFormSubmit = async (formData) => {
     setErrorMessage('');
     setExecutionResult(null);
     setProposedAction(null);
+    setVerifiedData(null);
+    setReadBackError('');
+    setShowDiscrepancies(false);
     setIsSubmitting(true);
     setLastSubmittedForm(formData);
 
@@ -63,6 +79,9 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
   const handleConfirmAction = async (actionId, options = {}) => {
     setActionStatus('executing');
     setErrorMessage('');
+    setVerifiedData(null);
+    setReadBackError('');
+    setShowDiscrepancies(false);
 
     try {
       const response = await confirmChatAction(actionId, {
@@ -76,6 +95,42 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
       } else {
         setActionStatus('confirmed');
         setExecutionResult(response);
+
+        // Read back created hierarchy directly from SAP database in background & verify
+        const resolvedAlt =
+          response.createdAlternative ||
+          response.targetAlternative ||
+          response.actionResult?.createdAlternative ||
+          response.actionExecuted?.alternative ||
+          lastSubmittedForm?.targetAltBom ||
+          '01';
+
+        setIsReadingBack(true);
+        try {
+          const verifyResult = await verifyCopiedBom({
+            sourceMaterial: lastSubmittedForm?.sourceMaterial,
+            sourcePlant: lastSubmittedForm?.sourcePlant,
+            sourceUsage: lastSubmittedForm?.sourceUsage || '1',
+            sourceAlternative: lastSubmittedForm?.sourceAltBom || '1',
+            targetMaterial: lastSubmittedForm?.targetMaterial,
+            targetPlant: lastSubmittedForm?.targetPlant,
+            targetUsage: lastSubmittedForm?.targetUsage || '1',
+            targetAlternative: resolvedAlt
+          });
+
+          if (verifyResult) {
+            setVerifiedData(verifyResult);
+          } else if (verifyResult?.message) {
+            setReadBackError(verifyResult.message);
+          }
+        } catch (readErr) {
+          console.error('[CopyBomView] Read-back failed:', readErr);
+          setReadBackError(
+            readErr.response?.data?.message || readErr.message || 'Unable to read back target hierarchy from SAP.'
+          );
+        } finally {
+          setIsReadingBack(false);
+        }
       }
     } catch (err) {
       console.error('Error confirming Copy BOM:', err);
@@ -100,13 +155,52 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
     setProposedAction(null);
     setActionStatus('pending');
     setExecutionResult(null);
+    setVerifiedData(null);
+    setReadBackError('');
+    setIsReadingBack(false);
+    setShowDiscrepancies(false);
     setErrorMessage('');
     setLastSubmittedForm(null);
   };
 
+  // Consistent single source of truth for all counts across banner and cards
+  const bomsCount = verifiedData
+    ? verifiedData.bomsCreated
+    : (executionResult?.totalBoms || executionResult?.data?.length || 1);
+
+  const compsCount = verifiedData
+    ? verifiedData.totalComponents
+    : (isReadingBack ? '...' : (executionResult?.totalComponents || executionResult?.data?.length || '-'));
+
+  const levelsCount = verifiedData
+    ? verifiedData.totalLevels
+    : (executionResult?.totalLevels || 1);
+
+  const rootAlt =
+    verifiedData?.rootAlternative ||
+    executionResult?.createdAlternative ||
+    executionResult?.executedAction?.alternative ||
+    lastSubmittedForm?.targetAltBom ||
+    '01';
+
+  const targetMat =
+    lastSubmittedForm?.targetMaterial ||
+    executionResult?.executedAction?.recordId ||
+    'BOM';
+
+  // Differences evaluation
+  const differences = verifiedData?.verification?.differences || [];
+  const hasDifferences = verifiedData ? (differences.length > 0 || verifiedData.status === 'PARTIAL' || verifiedData.status === 'FAILED') : false;
+  const diffCount = differences.length;
+
+  // Plain text banner subtitle (consistent numbers with cards, no technical wording)
+  const bannerSubtitle = isReadingBack
+    ? `Verifying copied BOM hierarchy for ${targetMat}...`
+    : `Created Alternative ${rootAlt} for ${targetMat}: ${bomsCount} BOMs and ${compsCount} components across ${levelsCount} levels.`;
+
   return (
     <div className="fiori-app-view-root">
-      {/* Full-width Fiori Horizon Header (Identical to Homepage / Operations Header) */}
+      {/* Full-width Fiori Horizon Header */}
       <div className="fiori-ph">
         <div className="fiori-bc">
           <button type="button" className="fiori-bc-link" onClick={onNavigateHome || onBack}>
@@ -137,19 +231,20 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
         </p>
       </div>
 
-      <div className="fiori-view-body">
+      <div className="fiori-view-body" style={{ padding: '16px 24px 28px' }}>
         {/* Error Notice */}
         {errorMessage && (
-          <div className="sap-alert sap-alert-error" style={{ maxWidth: 680, width: '100%', margin: '0 auto 14px' }}>
+          <div className="sap-alert sap-alert-error" style={{ maxWidth: 760, width: '100%', margin: '0 auto 14px' }}>
             <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
             <div>{errorMessage}</div>
           </div>
         )}
+
         {/* Step 1: Form View (when no proposal is pending and not yet confirmed) */}
         {!proposedAction && !executionResult && (
-          <div className="sap-form-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
+          <div className="sap-form-view-section" style={{ maxWidth: 760, width: '100%', margin: '0 auto' }}>
             {isSubmitting ? (
-              <div className="sap-loading-card" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
+              <div className="sap-loading-card" style={{ maxWidth: 760, width: '100%', margin: '0 auto' }}>
                 <span className="sap-spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
                 <h4>Validating with SAP via RFC...</h4>
                 <p>Checking source BOM in MAST/STAS/STPO and determining target alternative.</p>
@@ -160,7 +255,7 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
                 onCancel={onBack}
                 initialValues={lastSubmittedForm || {}}
                 hideHeader={true}
-                style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}
+                style={{ maxWidth: 760, width: '100%', margin: '0 auto' }}
               />
             )}
           </div>
@@ -168,9 +263,9 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
 
         {/* Step 2: Confirmation Proposal Gate */}
         {proposedAction && !executionResult && (
-          <div className="sap-proposal-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
+          <div className="sap-proposal-view-section" style={{ maxWidth: 760, width: '100%', margin: '0 auto' }}>
             <div className="sap-proposal-header-card">
-              <ShieldCheck size={20} color="#0070f2" />
+              <ShieldCheck size={20} color="var(--sap-primary)" style={{ flexShrink: 0 }} />
               <div>
                 <h4>Human Confirmation Gate: Verify BOM Copy Proposal</h4>
                 <p>Review the source and target parameters below. Confirming will execute the copy via direct SAP RFC.</p>
@@ -186,78 +281,115 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
           </div>
         )}
 
-        {/* Step 3: Success Execution Result Card */}
+        {/* Step 3: Success / Warning Execution Result Card */}
         {executionResult && (
-          <div className="sap-result-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
-            <div className="sap-result-success-card">
-              <div className="sap-result-success-header">
-                <div className="sap-result-success-icon">
-                  <CheckCircle2 size={32} color="#107e3e" />
+          <div className="sap-result-view-section" style={{ maxWidth: 760, width: '100%', margin: '0 auto' }}>
+            <div
+              className="sap-result-success-card"
+              style={
+                hasDifferences
+                  ? { borderColor: 'var(--sap-warning-border, #fed7aa)', backgroundColor: '#ffffff' }
+                  : {}
+              }
+            >
+              {/* Result Banner: Icon, Title, and One Line of Plain Text */}
+              <div className="sap-result-success-header" style={{ alignItems: 'flex-start' }}>
+                <div className="sap-result-success-icon" style={{ display: 'flex', alignItems: 'center', marginTop: 2 }}>
+                  {hasDifferences ? (
+                    <AlertTriangle size={24} color="var(--sap-warning, #d97706)" />
+                  ) : (
+                    <CheckCircle2 size={24} color="var(--sap-success, #16a34a)" />
+                  )}
                 </div>
-                <div>
-                  <h3 className="sap-result-success-title">BOM Copied Successfully</h3>
-                  <p className="sap-result-success-message">{executionResult.reply}</p>
-                </div>
-              </div>
-
-              {/* Result Meta Cards */}
-              <div className="sap-result-meta-grid">
-                <div className="sap-result-meta-item">
-                  <span className="sap-result-meta-label">Target Material</span>
-                  <strong className="sap-result-meta-val">{lastSubmittedForm?.targetMaterial || '-'}</strong>
-                </div>
-                <div className="sap-result-meta-item">
-                  <span className="sap-result-meta-label">Target Plant</span>
-                  <strong className="sap-result-meta-val">{lastSubmittedForm?.targetPlant || '-'}</strong>
-                </div>
-                <div className="sap-result-meta-item">
-                  <span className="sap-result-meta-label">Alternative Created</span>
-                  <span className="sap-badge sap-badge-primary" style={{ fontSize: '13px', padding: '3px 8px' }}>
-                    {executionResult.createdAlternative || executionResult.executedAction?.alternative || '01'}
-                  </span>
-                </div>
-                <div className="sap-result-meta-item">
-                  <span className="sap-result-meta-label">Components Copied</span>
-                  <strong className="sap-result-meta-val">
-                    {executionResult.data?.length || executionResult.executedAction?.componentCount || 'All'}
-                  </strong>
-                </div>
-              </div>
-
-              {/* Copied Components Table */}
-              {executionResult.data && executionResult.data.length > 0 && (
-                <div className="sap-result-components-table-wrap">
-                  <h4 className="sap-table-section-title">Copied BOM Components</h4>
-                  <div className="sap-table-container">
-                    <table className="sap-table">
-                      <thead>
-                        <tr>
-                          <th>Item</th>
-                          <th>Component</th>
-                          <th>Description</th>
-                          <th>Quantity</th>
-                          <th>Unit</th>
-                          <th>Category</th>
-                          <th>Valid From</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {executionResult.data.map((item, idx) => (
-                          <tr key={idx}>
-                            <td>{item.itemNo || item.POSNR || (idx + 1) * 10}</td>
-                            <td><strong>{item.component || item.IDNRK || item.material || '-'}</strong></td>
-                            <td>{item.description || item.OJTXP || item.MAKTX || '-'}</td>
-                            <td>{item.quantity || item.MENGE || '-'}</td>
-                            <td>{item.unit || item.MEINS || '-'}</td>
-                            <td>{item.itemCategory || item.POSTP || 'L'}</td>
-                            <td>{item.validFrom || item.DATUV || '-'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <h3
+                      className="sap-result-success-title"
+                      style={{
+                        margin: 0,
+                        color: hasDifferences ? 'var(--sap-warning-text, #9a3412)' : 'var(--sap-success-text, #166534)'
+                      }}
+                    >
+                      {hasDifferences
+                        ? `BOM copied with ${diffCount} difference${diffCount === 1 ? '' : 's'} from the source`
+                        : 'BOM Copied Successfully'}
+                    </h3>
+                    {hasDifferences && (
+                      <button
+                        type="button"
+                        onClick={() => setShowDiscrepancies((prev) => !prev)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--sap-primary, #0070f2)',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          padding: 0,
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        {showDiscrepancies ? 'Hide details' : 'View details'}
+                      </button>
+                    )}
                   </div>
+                  <p className="sap-result-success-message" style={{ marginTop: 4, marginBottom: 0 }}>
+                    {bannerSubtitle}
+                  </p>
+                </div>
+              </div>
+
+              {/* Collapsed by default discrepancy list (ONLY shown if verification found differences and user clicks View details) */}
+              {hasDifferences && showDiscrepancies && differences.length > 0 && (
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: '12px 16px',
+                    borderRadius: 6,
+                    backgroundColor: '#fffbeb',
+                    border: '1px solid #fed7aa'
+                  }}
+                >
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#9a3412', marginBottom: 6 }}>
+                    Discrepancies from source BOM ({differences.length}):
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: '11.5px', color: 'var(--sap-text-dark, #1e293b)', lineHeight: 1.5 }}>
+                    {differences.map((diff, idx) => (
+                      <li key={idx} style={{ marginBottom: 3 }}>
+                        {diff}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
+
+              {/* 4 Summary Cards */}
+              <div className="sap-result-meta-grid" style={{ marginTop: 16, marginBottom: 20 }}>
+                <div className="sap-result-meta-item">
+                  <span className="sap-result-meta-label">BOMs Created</span>
+                  <strong className="sap-result-meta-val" style={{ color: 'var(--sap-primary)' }}>
+                    {bomsCount}
+                  </strong>
+                </div>
+                <div className="sap-result-meta-item">
+                  <span className="sap-result-meta-label">Total Components Copied</span>
+                  <strong className="sap-result-meta-val" style={{ color: 'var(--sap-text-dark)' }}>
+                    {compsCount}
+                  </strong>
+                </div>
+                <div className="sap-result-meta-item">
+                  <span className="sap-result-meta-label">Levels</span>
+                  <strong className="sap-result-meta-val">
+                    {levelsCount}
+                  </strong>
+                </div>
+                <div className="sap-result-meta-item">
+                  <span className="sap-result-meta-label">Root Alternative</span>
+                  <span className="sap-badge sap-badge-primary" style={{ fontSize: '12px', padding: '2px 8px', width: 'fit-content', fontWeight: 700 }}>
+                    {rootAlt}
+                  </span>
+                </div>
+              </div>
 
               {/* Bottom Actions */}
               <div className="sap-result-actions">
@@ -265,16 +397,18 @@ export default function CopyBomView({ systemKey = 'DEV', onBack, onNavigateHome 
                   type="button"
                   className="sap-btn sap-btn-secondary"
                   onClick={onBack}
+                  style={{ height: 32, fontSize: '12px', padding: '0 12px' }}
                 >
-                  <ArrowLeft size={15} />
+                  <ArrowLeft size={13} />
                   <span>Return to Launchpad</span>
                 </button>
                 <button
                   type="button"
                   className="sap-btn sap-btn-primary"
                   onClick={handleReset}
+                  style={{ height: 32, fontSize: '12px', padding: '0 12px' }}
                 >
-                  <Copy size={15} />
+                  <Copy size={13} />
                   <span>Copy Another BOM</span>
                 </button>
               </div>

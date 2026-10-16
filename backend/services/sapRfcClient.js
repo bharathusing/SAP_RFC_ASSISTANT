@@ -37,18 +37,79 @@ function loadMockBoms() {
 }
 loadMockBoms();
 
+import { supabaseService, getPersistedCredential } from './supabaseClient.js';
+import { decryptPassword } from '../utils/crypto.js';
+
+let currentActiveServer = null;
+
 /**
- * Retrieves normalized RFC connection parameters from environment variables.
+ * Sets the active RFC server for the current context/request.
+ */
+export function setActiveRfcServer(server) {
+  if (server && (server.sap_username || server.ashost || server.id)) {
+    currentActiveServer = server;
+  }
+}
+
+/**
+ * Returns the currently active RFC server.
+ */
+export function getActiveRfcServer() {
+  return currentActiveServer;
+}
+
+/**
+ * Retrieves normalized RFC connection parameters dynamically from sap_servers.
+ * Requires stored SAP credentials; never falls back to .env or 'LEELAM_EXT'.
  */
 export function getRfcConnectionParams(customOverrides = {}) {
-  const router = process.env.SAP_RFC_ROUTER || '/H/103.206.249.51/H/';
-  const ashost = process.env.SAP_RFC_ASHOST || '192.168.12.241';
-  const sysnr = process.env.SAP_RFC_SYSNR || '09';
-  const client = process.env.SAP_RFC_CLIENT || '500';
-  const user = process.env.SAP_RFC_USER || 'LEELAM_EXT';
-  const passwd = process.env.SAP_RFC_PASSWORD || '';
-  const gwserv = process.env.SAP_RFC_GWSERV || '3309';
-  const lang = process.env.SAP_RFC_LANG || 'EN';
+  let server = customOverrides.server || customOverrides;
+
+  // Fallback to active server if no server or no credentials provided
+  if ((!server || (!server.sap_username && !server.user)) && currentActiveServer) {
+    server = { ...currentActiveServer, ...(typeof server === 'object' ? server : {}) };
+  }
+
+  if (typeof customOverrides.serverId === 'string' && !server.ashost) {
+    const dbServer = supabaseService.getServerByIdSync
+      ? supabaseService.getServerByIdSync(customOverrides.serverId)
+      : null;
+    if (dbServer) server = { ...dbServer, ...server };
+  }
+
+  // If server has an ID but no password, check persisted credentials cache
+  if (server?.id && !server.sap_password_encrypted && !server.sap_password && !server.passwd && !server.password) {
+    const persisted = getPersistedCredential(server.id);
+    if (persisted) {
+      if (!server.sap_username && persisted.sap_username) server.sap_username = persisted.sap_username;
+      if (persisted.sap_password_encrypted) server.sap_password_encrypted = persisted.sap_password_encrypted;
+    }
+  }
+
+  // Resolve SAP Username from server configuration
+  const user = server.sap_username || server.user;
+
+  // Resolve SAP Password (plaintext override or decrypted from sap_password_encrypted)
+  let passwd = server.sap_password || server.passwd || server.password;
+  if (!passwd && server.sap_password_encrypted) {
+    try {
+      passwd = decryptPassword(server.sap_password_encrypted);
+    } catch (err) {
+      throw new Error(`Failed to decrypt SAP password: ${err.message}`);
+    }
+  }
+
+  // Strictly enforce credentials requirement: NO LEELAM_EXT default, NO .env fallback!
+  if (!user || !passwd) {
+    throw new Error('No SAP credentials configured for this server');
+  }
+
+  const router = server.router || server.saprouter || process.env.SAP_RFC_ROUTER || '/H/103.206.249.51/H/';
+  const ashost = server.ashost || process.env.SAP_RFC_ASHOST || '192.168.12.241';
+  const sysnr = server.sysnr !== undefined ? String(server.sysnr).padStart(2, '0') : (process.env.SAP_RFC_SYSNR || '09');
+  const client = server.client !== undefined ? String(server.client) : (process.env.SAP_RFC_CLIENT || '500');
+  const gwserv = server.gwserv || process.env.SAP_RFC_GWSERV || '3309';
+  const lang = server.lang || process.env.SAP_RFC_LANG || 'EN';
 
   const params = {
     ashost,
@@ -57,15 +118,14 @@ export function getRfcConnectionParams(customOverrides = {}) {
     user,
     passwd,
     lang,
-    cpic_streaming: 'enabled',
-    ...customOverrides
+    cpic_streaming: 'enabled'
   };
 
-  if (router && router.trim()) {
-    params.saprouter = router.trim();
+  if (router && String(router).trim()) {
+    params.saprouter = String(router).trim();
   }
-  if (gwserv && gwserv.trim()) {
-    params.gwserv = gwserv.trim();
+  if (gwserv && String(gwserv).trim()) {
+    params.gwserv = String(gwserv).trim();
   }
 
   return params;
@@ -103,6 +163,35 @@ export function formatRfcTableOptions(sqlString) {
 }
 
 /**
+ * Creates a standard Basis prerequisite error
+ */
+export function createBasisPrerequisiteError(operation) {
+  const err = new Error(
+    `RFC not configured — ${operation} requires SAP NetWeaver RFC SDK (node-rfc) and Basis confirmation on RFC/BAPI authorization.`
+  );
+  err.code = 'RFC_NOT_CONFIGURED';
+  err.requiresBasisApproval = true;
+  err.status = 501; // Not Implemented
+  return err;
+}
+
+/**
+ * Retries a background job via SAP XBP RFC interface.
+ * Stub: throws Basis prerequisite error until NetWeaver SDK is installed.
+ */
+export async function rfcRetryJob(jobId, credentials = null) {
+  throw createBasisPrerequisiteError(`Job retry for ${jobId}`);
+}
+
+/**
+ * Reprocesses an IDoc via SAP EDI RFC interface.
+ * Stub: throws Basis prerequisite error until NetWeaver SDK is installed.
+ */
+export async function rfcReprocessIdoc(idocNumber, credentials = null) {
+  throw createBasisPrerequisiteError(`IDoc reprocessing for ${idocNumber}`);
+}
+
+/**
  * Generic BAPI / RFC function call wrapper.
  * Opens an RFC connection, calls the function module, and closes the connection.
  *
@@ -112,6 +201,14 @@ export function formatRfcTableOptions(sqlString) {
  * @returns {Promise<object>}
  */
 export async function executeRfcFunction(functionName, parameters = {}, customCredentials = {}) {
+  if (
+    functionName.startsWith('BAPI_XBP_') ||
+    functionName.startsWith('EDI_') ||
+    functionName.startsWith('IDOC_')
+  ) {
+    throw createBasisPrerequisiteError(`BAPI execution for ${functionName}`);
+  }
+
   if (process.env.USE_MOCK_SAP === 'true') {
     return {
       success: true,
@@ -139,12 +236,14 @@ export async function executeRfcFunction(functionName, parameters = {}, customCr
  * @returns {Promise<{ success: boolean, message: string, latencyMs?: number }>}
  */
 export async function pingRfcServer(customCredentials = {}) {
-  if (process.env.USE_MOCK_SAP === 'true') {
-    return { success: true, message: 'Mock RFC Ping Successful', latencyMs: 2 };
-  }
-
   const startTime = Date.now();
   try {
+    const params = getRfcConnectionParams(customCredentials);
+
+    if (process.env.USE_MOCK_SAP === 'true') {
+      return { success: true, message: 'Mock RFC Ping Successful', latencyMs: 2 };
+    }
+
     const client = await openRfcClient(customCredentials);
     try {
       await client.call('RFC_PING', {});
@@ -244,7 +343,7 @@ export async function rfcReadBom(params = {}) {
   }
 
   // Live RFC execution via RFC_READ_TABLE (MAST -> STAS -> STPO)
-  const client = params.client || (await openRfcClient());
+  const client = params.client || (await openRfcClient(params.server || params));
   const shouldClose = !params.client;
   try {
     // 1. Query MAST for material and plant
@@ -492,7 +591,9 @@ export async function rfcValidateSourceBom(params = {}) {
     material: cleanMat,
     plant: cleanPlant,
     bomUsage,
-    alternativeBom: alternativeBom || '1'
+    alternativeBom: alternativeBom || '1',
+    server: params.server,
+    client: params.client
   });
 
   if (!readResult.success || !readResult.bomExists) {
@@ -563,6 +664,10 @@ export async function rfcCreateBom(params = {}) {
     COMP_UNIT: c.unit || ''
   }));
 
+  if (params.server) {
+    getRfcConnectionParams(params.server);
+  }
+
   // Mock mode handling
   if (process.env.USE_MOCK_SAP === 'true') {
     let target = activeMockBoms.find(
@@ -609,7 +714,7 @@ export async function rfcCreateBom(params = {}) {
   }
 
   // Live RFC execution via BAPI_MATERIAL_BOM_GROUP_CREATE
-  const client = params.client || (await openRfcClient());
+  const client = params.client || (await openRfcClient(params.server || params));
   const shouldClose = !params.client;
   try {
     const today = validFrom
@@ -781,6 +886,10 @@ export async function rfcDeleteBom(params = {}) {
   const cleanAlt = String(alternativeBom || '1').trim();
   const altPadded = cleanAlt.padStart(2, '0');
 
+  if (params.server) {
+    getRfcConnectionParams(params.server);
+  }
+
   if (process.env.USE_MOCK_SAP === 'true') {
     const idx = activeMockBoms.findIndex(
       (b) =>
@@ -802,7 +911,7 @@ export async function rfcDeleteBom(params = {}) {
     };
   }
 
-  const client = await openRfcClient();
+  const client = params.client || (await openRfcClient(params.server || params));
   try {
     // 1. Execute deletion via headless RFC transaction ZBOM_COPY
     const bdcData = [
@@ -896,9 +1005,11 @@ export async function rfcDeleteBom(params = {}) {
       message: `Failed to delete BOM via RFC: ${err.message}`
     };
   } finally {
-    try {
-      await client.close();
-    } catch {}
+    if (!params.client) {
+      try {
+        await client.close();
+      } catch {}
+    }
   }
 }
 
@@ -917,8 +1028,9 @@ export async function rfcExplodeBomHierarchy(params = {}) {
     maxDepth = 10
   } = params;
 
-  const client = params.client || (await openRfcClient());
-  const shouldClose = !params.client;
+  const isMock = process.env.USE_MOCK_SAP === 'true';
+  const client = params.client || (isMock ? null : await openRfcClient(params.server || {}));
+  const shouldClose = !params.client && !isMock;
 
   const hierarchyItems = [];
   const visited = new Set();
@@ -1016,6 +1128,611 @@ export async function rfcExplodeBomHierarchy(params = {}) {
 }
 
 /**
+ * ============================================================================
+ * DISPLAY BOM (BOM HIERARCHY EXPLORER) ENRICHED READER
+ * ============================================================================
+ */
+
+/**
+ * Helper to format material numbers:
+ * Trim leading zeros only on purely numeric material numbers (000000000011021735 -> 11021735).
+ * Alphanumeric ones stay unchanged (A1BH0214C -> A1BH0214C).
+ */
+export function formatMaterialNumber(mat) {
+  if (!mat) return '';
+  const s = String(mat).trim();
+  if (/^\d+$/.test(s)) {
+    const trimmed = s.replace(/^0+/, '');
+    return trimmed.length > 0 ? trimmed : '0';
+  }
+  return s;
+}
+
+/**
+ * Formats SAP date YYYYMMDD into DD.MM.YYYY.
+ */
+export function formatSapDate(rawDate) {
+  if (!rawDate) return '-';
+  const str = String(rawDate).trim();
+  if (!str || str === '00000000' || str === '-') return '-';
+  if (/^\d{8}$/.test(str)) {
+    const yyyy = str.substring(0, 4);
+    const mm = str.substring(4, 6);
+    const dd = str.substring(6, 8);
+    return `${dd}.${mm}.${yyyy}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [yyyy, mm, dd] = str.split('-');
+    return `${dd}.${mm}.${yyyy}`;
+  }
+  return str;
+}
+
+/**
+ * Batches MAKT queries in chunks of ~25 materials.
+ * Selects description in target language (or falls back to any language, then '-').
+ */
+export async function batchQueryMakt(client, materials, targetLang = 'E') {
+  if (!materials || materials.length === 0) return {};
+  loadMockBoms();
+  const uniqueMats = [...new Set(materials.map((m) => String(m).trim().toUpperCase()).filter(Boolean))];
+  const descMap = {};
+
+  if (process.env.USE_MOCK_SAP === 'true' || !client) {
+    for (const m of uniqueMats) {
+      const trimmed = formatMaterialNumber(m);
+      const bomHeader = activeMockBoms.find(
+        (b) => String(b.material).toUpperCase() === m || formatMaterialNumber(b.material) === trimmed
+      );
+      if (bomHeader && bomHeader.description) {
+        descMap[m] = bomHeader.description;
+        descMap[trimmed] = bomHeader.description;
+        continue;
+      }
+      let foundCompDesc = null;
+      for (const b of activeMockBoms) {
+        const comp = (b.components || []).find(
+          (c) => String(c.component || c.material).toUpperCase() === m ||
+                 formatMaterialNumber(c.component || c.material) === trimmed
+        );
+        if (comp && comp.description !== undefined) {
+          foundCompDesc = comp.description;
+          break;
+        }
+      }
+      const finalDesc = (foundCompDesc && String(foundCompDesc).trim()) ? String(foundCompDesc).trim() : '-';
+      descMap[m] = finalDesc;
+      descMap[trimmed] = finalDesc;
+    }
+    return descMap;
+  }
+
+  const CHUNK_SIZE = 25;
+  const langMatched = new Set();
+  const lang1Char = (targetLang || 'E').charAt(0).toUpperCase();
+
+  for (let i = 0; i < uniqueMats.length; i += CHUNK_SIZE) {
+    const chunk = uniqueMats.slice(i, i + CHUNK_SIZE);
+    const orClauses = chunk.map((m) => `MATNR = '${m}'`).join(' OR ');
+    const options = formatRfcTableOptions(orClauses);
+
+    try {
+      const maktRes = await client.call('RFC_READ_TABLE', {
+        QUERY_TABLE: 'MAKT',
+        DELIMITER: '|',
+        OPTIONS: options,
+        FIELDS: [
+          { FIELDNAME: 'MATNR' },
+          { FIELDNAME: 'SPRAS' },
+          { FIELDNAME: 'MAKTX' }
+        ],
+        DATA: []
+      });
+
+      const fieldNames = (maktRes.FIELDS || []).map((f) => f.FIELDNAME.trim());
+      for (const row of maktRes.DATA || []) {
+        const parts = row.WA.split('|');
+        const obj = {};
+        fieldNames.forEach((fn, idx) => { obj[fn] = parts[idx]?.trim(); });
+        const mat = obj.MATNR;
+        const spras = (obj.SPRAS || '').toUpperCase();
+        const maktx = (obj.MAKTX || '').trim();
+
+        if (!mat || !maktx) continue;
+
+        const trimmed = formatMaterialNumber(mat);
+
+        if (spras === lang1Char) {
+          descMap[mat] = maktx;
+          descMap[trimmed] = maktx;
+          langMatched.add(mat);
+          langMatched.add(trimmed);
+        } else if (!langMatched.has(mat) && !langMatched.has(trimmed)) {
+          descMap[mat] = maktx;
+          descMap[trimmed] = maktx;
+        }
+      }
+    } catch (err) {
+      console.warn(`[sapRfcClient] batchQueryMakt error:`, err.message);
+    }
+  }
+
+  for (const m of uniqueMats) {
+    const trimmed = formatMaterialNumber(m);
+    if (!descMap[m]) descMap[m] = descMap[trimmed] || '-';
+    if (!descMap[trimmed]) descMap[trimmed] = descMap[m] || '-';
+  }
+
+  return descMap;
+}
+
+/**
+ * Batches MAST queries in chunks of ~25 materials for a specific plant.
+ * Returns a Set of materials that have a sub-BOM in that plant.
+ */
+export async function batchQuerySubBom(client, materials, plant) {
+  if (!materials || materials.length === 0) return new Set();
+  loadMockBoms();
+  const cleanPlt = String(plant || '').trim().toUpperCase();
+  const uniqueMats = [...new Set(materials.map((m) => String(m).trim().toUpperCase()).filter(Boolean))];
+  const subBomMats = new Set();
+
+  if (process.env.USE_MOCK_SAP === 'true' || !client) {
+    for (const m of uniqueMats) {
+      const trimmed = formatMaterialNumber(m);
+      const hasMock = activeMockBoms.some(
+        (b) => (String(b.material).toUpperCase() === m || formatMaterialNumber(b.material) === trimmed) &&
+               String(b.plant).toUpperCase() === cleanPlt
+      );
+      if (hasMock) {
+        subBomMats.add(m);
+        subBomMats.add(trimmed);
+      }
+    }
+    return subBomMats;
+  }
+
+  const CHUNK_SIZE = 25;
+  for (let i = 0; i < uniqueMats.length; i += CHUNK_SIZE) {
+    const chunk = uniqueMats.slice(i, i + CHUNK_SIZE);
+    const orClauses = chunk.map((m) => `MATNR = '${m}'`).join(' OR ');
+    const sql = `WERKS = '${cleanPlt}' AND ( ${orClauses} )`;
+    const options = formatRfcTableOptions(sql);
+
+    try {
+      const mastRes = await client.call('RFC_READ_TABLE', {
+        QUERY_TABLE: 'MAST',
+        DELIMITER: '|',
+        OPTIONS: options,
+        FIELDS: [{ FIELDNAME: 'MATNR' }, { FIELDNAME: 'STLNR' }],
+        DATA: []
+      });
+
+      const fieldNames = (mastRes.FIELDS || []).map((f) => f.FIELDNAME.trim());
+      for (const row of mastRes.DATA || []) {
+        const parts = row.WA.split('|');
+        const obj = {};
+        fieldNames.forEach((fn, idx) => { obj[fn] = parts[idx]?.trim(); });
+        if (obj.MATNR) {
+          subBomMats.add(obj.MATNR);
+          subBomMats.add(formatMaterialNumber(obj.MATNR));
+        }
+      }
+    } catch (err) {
+      console.warn(`[sapRfcClient] batchQuerySubBom error for plant ${cleanPlt}:`, err.message);
+    }
+  }
+
+  return subBomMats;
+}
+
+/**
+ * Reads single-level direct BOM records (MAST -> STAS -> STPO -> STKO) for a material.
+ */
+export async function fetchDirectBom(client, cleanMat, cleanPlt, cleanUsg, cleanAlt) {
+  loadMockBoms();
+  if (process.env.USE_MOCK_SAP === 'true' || !client) {
+    const trimmed = formatMaterialNumber(cleanMat);
+    let found = null;
+    if (cleanAlt) {
+      const altPad = String(cleanAlt).padStart(2, '0');
+      found = activeMockBoms.find(
+        (b) =>
+          (String(b.material).toUpperCase() === cleanMat || formatMaterialNumber(b.material) === trimmed) &&
+          String(b.plant) === cleanPlt &&
+          String(b.bomUsage || '1') === cleanUsg &&
+          (String(b.alternativeBom || '1').padStart(2, '0') === altPad || String(b.alternativeBom || '1') === String(cleanAlt))
+      );
+    }
+    if (!found) {
+      found = activeMockBoms.find(
+        (b) =>
+          (String(b.material).toUpperCase() === cleanMat || formatMaterialNumber(b.material) === trimmed) &&
+          String(b.plant) === cleanPlt &&
+          String(b.bomUsage || '1') === cleanUsg
+      );
+    }
+    if (!found) return null;
+    return {
+      bomNumber: found.bomNumber || '00785396',
+      alternative: cleanAlt ? String(cleanAlt).padStart(2, '0') : (found.alternativeBom ? String(found.alternativeBom).padStart(2, '0') : '01'),
+      baseQty: found.baseQty || '100',
+      baseUnit: found.baseUnit || 'PAA',
+      validFrom: found.validFrom || '',
+      description: found.description || '',
+      components: (found.components || []).map((c, idx) => ({
+        item: c.item || String((idx + 1) * 10).padStart(4, '0'),
+        itemCategory: c.itemCategory || 'L',
+        component: c.component || c.material || '',
+        quantity: c.quantity !== undefined ? c.quantity : 1,
+        unit: c.unit || 'EA',
+        description: c.description !== undefined ? c.description : '',
+        validFrom: c.validFrom || found.validFrom || ''
+      }))
+    };
+  }
+
+  // Live SAP RFC call via RFC_READ_TABLE
+  const mastRes = await client.call('RFC_READ_TABLE', {
+    QUERY_TABLE: 'MAST',
+    DELIMITER: '|',
+    OPTIONS: [{ TEXT: `MATNR = '${cleanMat}' AND WERKS = '${cleanPlt}'` }],
+    FIELDS: [
+      { FIELDNAME: 'MATNR' },
+      { FIELDNAME: 'WERKS' },
+      { FIELDNAME: 'STLAN' },
+      { FIELDNAME: 'STLNR' },
+      { FIELDNAME: 'STLAL' }
+    ],
+    DATA: []
+  });
+
+  const mastFieldNames = (mastRes.FIELDS || []).map((f) => f.FIELDNAME.trim());
+  const mastRows = (mastRes.DATA || []).map((r) => {
+    const parts = r.WA.split('|');
+    const obj = {};
+    mastFieldNames.forEach((fn, idx) => { obj[fn] = parts[idx]?.trim(); });
+    return {
+      matnr: obj.MATNR,
+      werks: obj.WERKS,
+      stlan: obj.STLAN,
+      stlnr: obj.STLNR,
+      stlal: obj.STLAL
+    };
+  });
+
+  if (mastRows.length === 0) return null;
+
+  const targetAltPad = cleanAlt ? String(cleanAlt).padStart(2, '0') : '01';
+  let matched = mastRows.find((r) => r.stlan === cleanUsg && r.stlal === targetAltPad);
+  if (!matched && cleanAlt) {
+    matched = mastRows.find((r) => r.stlan === cleanUsg && parseInt(r.stlal, 10) === parseInt(cleanAlt, 10));
+  }
+  if (!matched) {
+    matched = mastRows.find((r) => r.stlan === cleanUsg);
+  }
+  if (!matched) {
+    matched = mastRows[0];
+  }
+
+  const stlnr = matched.stlnr;
+  const stlal = matched.stlal;
+
+  // Base quantity & unit from STKO
+  let baseQty = '100';
+  let baseUnit = '';
+  let validFrom = '';
+  try {
+    const stkoRes = await client.call('RFC_READ_TABLE', {
+      QUERY_TABLE: 'STKO',
+      DELIMITER: '|',
+      OPTIONS: [{ TEXT: `STLNR = '${stlnr}' AND STLAL = '${stlal}'` }],
+      FIELDS: [{ FIELDNAME: 'BMENG' }, { FIELDNAME: 'BMEIN' }, { FIELDNAME: 'DATUV' }],
+      DATA: []
+    });
+    if (stkoRes.DATA && stkoRes.DATA.length > 0) {
+      const fn = (stkoRes.FIELDS || []).map((f) => f.FIELDNAME.trim());
+      const p = stkoRes.DATA[0].WA.split('|');
+      const rMap = {};
+      fn.forEach((n, i) => { rMap[n] = p[i]?.trim(); });
+      if (rMap.BMENG) baseQty = String(parseFloat(rMap.BMENG) || 100);
+      if (rMap.BMEIN) baseUnit = rMap.BMEIN;
+      if (rMap.DATUV) validFrom = rMap.DATUV;
+    }
+  } catch {}
+
+  if (!baseUnit) {
+    try {
+      const maraRes = await client.call('RFC_READ_TABLE', {
+        QUERY_TABLE: 'MARA',
+        DELIMITER: '|',
+        OPTIONS: [{ TEXT: `MATNR = '${cleanMat}'` }],
+        FIELDS: [{ FIELDNAME: 'MEINS' }],
+        DATA: []
+      });
+      if (maraRes.DATA && maraRes.DATA.length > 0) {
+        baseUnit = maraRes.DATA[0].WA.split('|')[0]?.trim();
+      }
+    } catch {}
+  }
+
+  // Active items from STAS
+  let activeItemNodes = new Set();
+  try {
+    const stasRes = await client.call('RFC_READ_TABLE', {
+      QUERY_TABLE: 'STAS',
+      DELIMITER: '|',
+      OPTIONS: [{ TEXT: `STLNR = '${stlnr}' AND STLAL = '${stlal}'` }],
+      FIELDS: [{ FIELDNAME: 'STLKN' }, { FIELDNAME: 'STPOZ' }],
+      DATA: []
+    });
+    activeItemNodes = new Set((stasRes.DATA || []).map((r) => r.WA.split('|')[0]?.trim()));
+  } catch {}
+
+  // Components from STPO
+  const stpoRes = await client.call('RFC_READ_TABLE', {
+    QUERY_TABLE: 'STPO',
+    DELIMITER: '|',
+    OPTIONS: [{ TEXT: `STLNR = '${stlnr}'` }],
+    FIELDS: [
+      { FIELDNAME: 'STLKN' },
+      { FIELDNAME: 'POSNR' },
+      { FIELDNAME: 'POSTP' },
+      { FIELDNAME: 'IDNRK' },
+      { FIELDNAME: 'MENGE' },
+      { FIELDNAME: 'MEINS' },
+      { FIELDNAME: 'POTX1' },
+      { FIELDNAME: 'DATUV' }
+    ],
+    DATA: []
+  });
+
+  const stpoFn = (stpoRes.FIELDS || []).map((f) => f.FIELDNAME.trim());
+  const rawComps = [];
+
+  for (const row of stpoRes.DATA || []) {
+    const p = row.WA.split('|').map((s) => s?.trim());
+    const rowObj = {};
+    stpoFn.forEach((fname, idx) => {
+      rowObj[fname] = p[idx] || '';
+    });
+
+    if (activeItemNodes.size > 0 && !activeItemNodes.has(rowObj.STLKN)) {
+      continue;
+    }
+
+    rawComps.push({
+      item: rowObj.POSNR || String((rawComps.length + 1) * 10).padStart(4, '0'),
+      itemCategory: rowObj.POSTP || 'L',
+      component: rowObj.IDNRK || '',
+      quantity: parseFloat(rowObj.MENGE) || 1,
+      unit: rowObj.MEINS || 'EA',
+      description: rowObj.POTX1 || '',
+      validFrom: rowObj.DATUV || validFrom || ''
+    });
+  }
+
+  return {
+    bomNumber: stlnr,
+    alternative: stlal,
+    baseQty,
+    baseUnit: baseUnit || 'PAA',
+    validFrom,
+    components: rawComps
+  };
+}
+
+/**
+ * Display-only reader for the BOM Hierarchy Explorer (Display BOM).
+ * Enriches BOM data with MAKT descriptions, STPO validFrom dates,
+ * batched MAST sub-BOM checks, and proper multi-level component hierarchy.
+ *
+ * @param {object} params
+ * @param {string} params.material Material number
+ * @param {string} params.plant Plant code
+ * @param {string} [params.bomUsage='1'] BOM Usage
+ * @param {string} [params.alternativeBom='1'] Alternative BOM
+ * @param {boolean} [params.multiLevel=false] Single Level vs Multi-Level explosion
+ * @param {number} [params.maxDepth=10] Maximum traversal depth for multi-level
+ * @param {object} [params.server] Selected SAP server with credentials and language
+ * @returns {Promise<object>} Display-ready BOM data structure
+ */
+export async function rfcGetBomDisplayData(params = {}) {
+  const {
+    material,
+    plant,
+    bomUsage = '1',
+    alternativeBom = '1',
+    multiLevel = false,
+    maxDepth = 10
+  } = params;
+
+  if (!material || !String(material).trim()) {
+    throw new Error('Material number is required for BOM display.');
+  }
+  if (!plant || !String(plant).trim()) {
+    throw new Error('Plant code is required for BOM display.');
+  }
+
+  const cleanMat = String(material).trim().toUpperCase();
+  const cleanPlt = String(plant).trim().toUpperCase();
+  const cleanUsg = String(bomUsage || '1').trim();
+  const cleanAlt = String(alternativeBom || '1').trim();
+
+  const isMock = process.env.USE_MOCK_SAP === 'true';
+  const client = params.client || (isMock ? null : await openRfcClient(params.server || {}));
+  const shouldClose = !params.client && !isMock;
+
+  const server = params.server || {};
+  let targetLang = 'E';
+  if (server.lang || server.sap_lang) {
+    const l = String(server.lang || server.sap_lang).trim().toUpperCase();
+    targetLang = l.charAt(0) || 'E';
+  } else if (process.env.SAP_RFC_LANG) {
+    targetLang = String(process.env.SAP_RFC_LANG).trim().toUpperCase().charAt(0) || 'E';
+  }
+
+  try {
+    // 1. Fetch root BOM
+    const rootBom = await fetchDirectBom(client, cleanMat, cleanPlt, cleanUsg, cleanAlt);
+    if (!rootBom) {
+      return {
+        success: false,
+        bomExists: false,
+        errorCode: 'BOM_NOT_FOUND',
+        message: `No BOM exists for Material ${cleanMat} in Plant ${cleanPlt} (Usage ${cleanUsg}).`,
+        material: formatMaterialNumber(cleanMat),
+        rawMaterial: cleanMat,
+        plant: cleanPlt,
+        bomUsage: cleanUsg,
+        alternativeBom: cleanAlt,
+        componentCount: 0,
+        components: []
+      };
+    }
+
+    const flatTree = [];
+    const materialsToEnrich = new Set([cleanMat]);
+
+    if (!multiLevel) {
+      // Single Level: direct components at Level 1
+      for (let idx = 0; idx < rootBom.components.length; idx++) {
+        const c = rootBom.components[idx];
+        const rawComp = String(c.component || '').trim().toUpperCase();
+        if (rawComp) materialsToEnrich.add(rawComp);
+
+        flatTree.push({
+          level: 1,
+          item: c.item || String((idx + 1) * 10).padStart(4, '0'),
+          itemNo: parseInt(c.item, 10) || (idx + 1) * 10,
+          component: formatMaterialNumber(rawComp),
+          rawComponent: rawComp,
+          material: formatMaterialNumber(rawComp),
+          rawMaterial: rawComp,
+          quantity: c.quantity !== undefined ? c.quantity : 1,
+          unit: c.unit || 'EA',
+          itemCategory: c.itemCategory || 'L',
+          validFromRaw: c.validFrom || '',
+          validFrom: formatSapDate(c.validFrom),
+          parentMaterial: formatMaterialNumber(cleanMat),
+          rawParentMaterial: cleanMat
+        });
+      }
+    } else {
+      // Multi-Level: recursive traversal up to maxDepth starting at Level 1
+      const visitedBranches = new Set();
+
+      async function traverse(parentMat, level) {
+        if (level > maxDepth) return;
+
+        const currentBom = (parentMat === cleanMat)
+          ? rootBom
+          : await fetchDirectBom(client, parentMat, cleanPlt, cleanUsg, '1');
+
+        if (!currentBom || !currentBom.components) return;
+
+        const compMats = currentBom.components.map((c) => String(c.component || '').trim().toUpperCase()).filter(Boolean);
+        compMats.forEach((m) => materialsToEnrich.add(m));
+
+        const subBomSet = await batchQuerySubBom(client, compMats, cleanPlt);
+
+        for (let idx = 0; idx < currentBom.components.length; idx++) {
+          const c = currentBom.components[idx];
+          const rawComp = String(c.component || '').trim().toUpperCase();
+          if (!rawComp) continue;
+
+          const hasSub = subBomSet.has(rawComp) || subBomSet.has(formatMaterialNumber(rawComp));
+
+          flatTree.push({
+            level,
+            item: c.item || String((idx + 1) * 10).padStart(4, '0'),
+            itemNo: parseInt(c.item, 10) || (idx + 1) * 10,
+            component: formatMaterialNumber(rawComp),
+            rawComponent: rawComp,
+            material: formatMaterialNumber(rawComp),
+            rawMaterial: rawComp,
+            quantity: c.quantity !== undefined ? c.quantity : 1,
+            unit: c.unit || 'EA',
+            itemCategory: c.itemCategory || 'L',
+            validFromRaw: c.validFrom || '',
+            validFrom: formatSapDate(c.validFrom),
+            hasSubBom: hasSub,
+            parentMaterial: formatMaterialNumber(parentMat),
+            rawParentMaterial: parentMat
+          });
+
+          if (hasSub && level < maxDepth) {
+            const branchKey = `${parentMat}->${rawComp}`;
+            if (!visitedBranches.has(branchKey)) {
+              visitedBranches.add(branchKey);
+              await traverse(rawComp, level + 1);
+            }
+          }
+        }
+      }
+
+      await traverse(cleanMat, 1);
+    }
+
+    // 2. Batched enrichment for MAKT descriptions and MAST sub-BOMs
+    const allMaterialsArray = Array.from(materialsToEnrich);
+    const [descMap, subBomMap] = await Promise.all([
+      batchQueryMakt(client, allMaterialsArray, targetLang),
+      batchQuerySubBom(client, allMaterialsArray, cleanPlt)
+    ]);
+
+    const finalComponents = flatTree.map((item) => {
+      const raw = item.rawComponent;
+      const formatted = item.component;
+      const desc = descMap[raw] || descMap[formatted] || '-';
+      const parentDesc = descMap[item.rawParentMaterial] || descMap[item.parentMaterial] || '-';
+      const hasSub = item.hasSubBom !== undefined
+        ? item.hasSubBom
+        : (subBomMap.has(raw) || subBomMap.has(formatted));
+
+      return {
+        ...item,
+        description: desc,
+        parentDescription: parentDesc,
+        hasSubBom: hasSub
+      };
+    });
+
+    const rootDesc = descMap[cleanMat] || descMap[formatMaterialNumber(cleanMat)] || '-';
+
+    return {
+      success: true,
+      bomExists: true,
+      material: formatMaterialNumber(cleanMat),
+      rawMaterial: cleanMat,
+      plant: cleanPlt,
+      bomUsage: cleanUsg,
+      alternativeBom: rootBom.alternative || cleanAlt,
+      header: {
+        bomNumber: rootBom.bomNumber || '-',
+        alternative: rootBom.alternative || cleanAlt,
+        plant: cleanPlt,
+        usage: cleanUsg,
+        baseQty: rootBom.baseQty || '100',
+        baseUnit: rootBom.baseUnit || 'PAA',
+        description: rootDesc,
+        material: formatMaterialNumber(cleanMat),
+        rawMaterial: cleanMat
+      },
+      componentCount: finalComponents.length,
+      components: finalComponents,
+      message: `BOM retrieved successfully via RFC (${finalComponents.length} components)`
+    };
+  } finally {
+    if (shouldClose && client) {
+      try {
+        await client.close();
+      } catch {}
+    }
+  }
+}
+
+/**
  * Queries SAP MAST table to determine the next available alternative BOM number (highest + 1)
  * for a material and plant/usage combination.
  * If no alternatives exist in the target plant, returns '01'.
@@ -1027,13 +1744,23 @@ export async function rfcExplodeBomHierarchy(params = {}) {
  * @param {object} [client=null]
  * @returns {Promise<string>} e.g. '01', '02', '03'
  */
-export async function getNextAvailableAlternative(material, plant, bomUsage = '1', client = null) {
+export async function getNextAvailableAlternative(material, plant, bomUsage = '1', client = null, server = null) {
   const cleanMat = String(material || '').trim().toUpperCase();
   const cleanPlt = String(plant || '').trim().toUpperCase();
   const cleanUsg = String(bomUsage || '1').trim();
 
+  if (process.env.USE_MOCK_SAP === 'true') {
+    const existing = activeMockBoms.filter(
+      (b) => String(b.material).toUpperCase() === cleanMat && String(b.plant) === cleanPlt
+    );
+    if (existing.length === 0) return '01';
+    const alts = existing.map((b) => parseInt(b.alternativeBom || '1', 10)).filter((n) => !isNaN(n));
+    if (alts.length === 0) return '01';
+    return String(Math.max(...alts) + 1).padStart(2, '0');
+  }
+
   const shouldClose = !client;
-  const rfc = client || (await openRfcClient());
+  const rfc = client || (await openRfcClient(server || {}));
 
   try {
     const mastRes = await rfc.call('RFC_READ_TABLE', {
@@ -1223,8 +1950,9 @@ export async function inspectAndVerifyHierarchy(params = {}) {
     client = null
   } = params;
 
-  const shouldClose = !client;
-  const rfc = client || (await openRfcClient());
+  const isMock = process.env.USE_MOCK_SAP === 'true';
+  const shouldClose = !client && !isMock;
+  const rfc = client || (isMock ? null : await openRfcClient(params.server || {}));
 
   try {
     const verifiedLevels = [];
@@ -1246,20 +1974,33 @@ export async function inspectAndVerifyHierarchy(params = {}) {
 
       let existsInTarget = false;
       let targetBomNo = '';
-      try {
-        const chk = await rfc.call('RFC_READ_TABLE', {
-          QUERY_TABLE: 'MAST',
-          DELIMITER: '|',
-          OPTIONS: formatRfcTableOptions(`MATNR = '${chkMat}' AND WERKS = '${targetPlant}' AND STLAL = '${chkAlt}' AND STLAN = '${chkUsage}'`),
-          FIELDS: [{ FIELDNAME: 'STLNR' }, { FIELDNAME: 'STLAL' }],
-          DATA: []
-        });
-        if (chk.DATA && chk.DATA.length > 0) {
+      if (isMock) {
+        const found = activeMockBoms.find(
+          (b) =>
+            String(b.material).toUpperCase() === chkMat &&
+            String(b.plant) === String(targetPlant) &&
+            String(b.alternativeBom || '1').padStart(2, '0') === chkAlt
+        );
+        if (found) {
           existsInTarget = true;
-          targetBomNo = chk.DATA[0].WA.split('|')[0]?.trim();
+          targetBomNo = found.bomNumber || 'MOCK_BOM';
         }
-      } catch (err) {
-        existsInTarget = false;
+      } else {
+        try {
+          const chk = await rfc.call('RFC_READ_TABLE', {
+            QUERY_TABLE: 'MAST',
+            DELIMITER: '|',
+            OPTIONS: formatRfcTableOptions(`MATNR = '${chkMat}' AND WERKS = '${targetPlant}' AND STLAL = '${chkAlt}' AND STLAN = '${chkUsage}'`),
+            FIELDS: [{ FIELDNAME: 'STLNR' }, { FIELDNAME: 'STLAL' }],
+            DATA: []
+          });
+          if (chk.DATA && chk.DATA.length > 0) {
+            existsInTarget = true;
+            targetBomNo = chk.DATA[0].WA.split('|')[0]?.trim();
+          }
+        } catch (err) {
+          existsInTarget = false;
+        }
       }
 
       if (!existsInTarget) {
@@ -1317,8 +2058,9 @@ export async function repairHierarchyBottomUp(params = {}) {
     client = null
   } = params;
 
-  const shouldClose = !client;
-  const rfc = client || (await openRfcClient());
+  const isMock = process.env.USE_MOCK_SAP === 'true';
+  const shouldClose = !client && !isMock;
+  const rfc = client || (isMock ? null : await openRfcClient(params.server || {}));
 
   try {
     const cleanSrcMat = String(sourceMaterial || '').trim().toUpperCase();
@@ -1335,16 +2077,25 @@ export async function repairHierarchyBottomUp(params = {}) {
       const specifiedAlt = String(targetAlternative).trim().padStart(2, '0');
       // If user specified an alt, check if it already exists in target plant
       let exists = false;
-      try {
-        const chk = await rfc.call('RFC_READ_TABLE', {
-          QUERY_TABLE: 'MAST',
-          DELIMITER: '|',
-          OPTIONS: formatRfcTableOptions(`MATNR = '${cleanTgtMat}' AND WERKS = '${cleanTgtPlt}' AND STLAN = '${bomUsage}' AND STLAL = '${specifiedAlt}'`),
-          FIELDS: [{ FIELDNAME: 'STLNR' }],
-          DATA: []
-        });
-        exists = chk.DATA && chk.DATA.length > 0;
-      } catch {}
+      if (isMock) {
+        exists = activeMockBoms.some(
+          (b) =>
+            String(b.material).toUpperCase() === cleanTgtMat &&
+            String(b.plant) === cleanTgtPlt &&
+            String(b.alternativeBom || '1').padStart(2, '0') === specifiedAlt
+        );
+      } else {
+        try {
+          const chk = await rfc.call('RFC_READ_TABLE', {
+            QUERY_TABLE: 'MAST',
+            DELIMITER: '|',
+            OPTIONS: formatRfcTableOptions(`MATNR = '${cleanTgtMat}' AND WERKS = '${cleanTgtPlt}' AND STLAN = '${bomUsage}' AND STLAL = '${specifiedAlt}'`),
+            FIELDS: [{ FIELDNAME: 'STLNR' }],
+            DATA: []
+          });
+          exists = chk.DATA && chk.DATA.length > 0;
+        } catch {}
+      }
       // Rule 1: If any existing appear, create new alt bom and don't touch existing!
       resolvedRootAlt = exists ? nextRootAlt : specifiedAlt;
     }
@@ -1568,6 +2319,10 @@ export async function rfcCopyBom(params = {}) {
     copyHierarchy = true
   } = params;
 
+  if (params.server) {
+    getRfcConnectionParams(params.server);
+  }
+
   // If hierarchical copy is requested (enabled by default), delegate to repairHierarchyBottomUp
   if (copyHierarchy) {
     return repairHierarchyBottomUp(params);
@@ -1585,19 +2340,28 @@ export async function rfcCopyBom(params = {}) {
 
   if (targetAlternative && String(targetAlternative).trim() && targetAlternative !== '1' && targetAlternative !== '01') {
     const specifiedAlt = String(targetAlternative).trim().padStart(2, '0');
-    const client = await openRfcClient();
     let exists = false;
-    try {
-      const chk = await client.call('RFC_READ_TABLE', {
-        QUERY_TABLE: 'MAST',
-        DELIMITER: '|',
-        OPTIONS: formatRfcTableOptions(`MATNR = '${cleanTgtMat}' AND WERKS = '${cleanTgtPlt}' AND STLAN = '${bomUsage}' AND STLAL = '${specifiedAlt}'`),
-        FIELDS: [{ FIELDNAME: 'STLNR' }],
-        DATA: []
-      });
-      exists = chk.DATA && chk.DATA.length > 0;
-    } catch {} finally {
-      try { await client.close(); } catch {}
+    if (process.env.USE_MOCK_SAP === 'true') {
+      exists = activeMockBoms.some(
+        (b) =>
+          String(b.material).toUpperCase() === cleanTgtMat &&
+          String(b.plant) === cleanTgtPlt &&
+          String(b.alternativeBom || '1').padStart(2, '0') === specifiedAlt
+      );
+    } else {
+      const client = await openRfcClient(params.server || {});
+      try {
+        const chk = await client.call('RFC_READ_TABLE', {
+          QUERY_TABLE: 'MAST',
+          DELIMITER: '|',
+          OPTIONS: formatRfcTableOptions(`MATNR = '${cleanTgtMat}' AND WERKS = '${cleanTgtPlt}' AND STLAN = '${bomUsage}' AND STLAL = '${specifiedAlt}'`),
+          FIELDS: [{ FIELDNAME: 'STLNR' }],
+          DATA: []
+        });
+        exists = chk.DATA && chk.DATA.length > 0;
+      } catch {} finally {
+        try { await client.close(); } catch {}
+      }
     }
     // Rule 1: Never touch or overwrite existing alternative!
     tgtAlt = exists ? nextAlt : specifiedAlt;
@@ -1608,7 +2372,8 @@ export async function rfcCopyBom(params = {}) {
     material: cleanSrcMat,
     plant: cleanSrcPlt,
     bomUsage,
-    alternativeBom: srcAlt
+    alternativeBom: srcAlt,
+    server: params.server
   });
 
   if (!sourceBom.success || !sourceBom.bomExists) {
@@ -1626,7 +2391,8 @@ export async function rfcCopyBom(params = {}) {
     alternativeBom: tgtAlt,
     components: sourceBom.components,
     baseQty: sourceBom.baseQty,
-    baseUnit: sourceBom.baseUnit
+    baseUnit: sourceBom.baseUnit,
+    server: params.server
   });
 
   if (!createResult.success) {
@@ -1664,7 +2430,7 @@ export async function rfcCopyBom(params = {}) {
  * @param {Array<object>} items
  * @returns {Promise<object>}
  */
-export async function rfcBatchValidateBoms(items = []) {
+export async function rfcBatchValidateBoms(items = [], options = {}) {
   if (!Array.isArray(items) || items.length === 0) {
     return {
       success: false,
@@ -1678,7 +2444,8 @@ export async function rfcBatchValidateBoms(items = []) {
   }
 
   const results = [];
-  const client = await openRfcClient();
+  const client = options.client || (await openRfcClient(options.server || options));
+  const shouldClose = !options.client;
 
   try {
     for (const item of items) {
@@ -1807,9 +2574,11 @@ export async function rfcBatchValidateBoms(items = []) {
       results.push(rowResult);
     }
   } finally {
-    try {
-      await client.close();
-    } catch {}
+    if (shouldClose) {
+      try {
+        await client.close();
+      } catch {}
+    }
   }
 
   const validCount = results.filter((r) => r.status === 'VALID').length;
@@ -1890,7 +2659,8 @@ export async function rfcBatchCopyBoms(items = [], options = {}) {
         bomUsage: tgtUsage,
         sourceAlternative: srcAlt,
         targetAlternative: tgtAlt,
-        copyHierarchy
+        copyHierarchy,
+        server: options.server
       });
 
       if (copyRes.success) {
@@ -1929,11 +2699,278 @@ export async function rfcBatchCopyBoms(items = [], options = {}) {
   };
 }
 
+/**
+ * Reads the created target BOM hierarchy back from SAP using read-only RFC calls
+ * (via rfcGetBomDisplayData), strictly verifies every component at every level against
+ * the reference BOM, and formats the structure grouped by Parent BOM for the result UI.
+ *
+ * @param {object} params
+ * @returns {Promise<object>}
+ */
+export async function verifyCopiedBomHierarchy(params = {}) {
+  const {
+    sourceMaterial,
+    sourcePlant,
+    sourceUsage = '1',
+    sourceAlternative = '1',
+    targetMaterial,
+    targetPlant,
+    targetUsage = '1',
+    targetAlternative = '1',
+    server = null,
+    client = null
+  } = params;
+
+  if (!targetMaterial || !targetPlant) {
+    throw new Error('targetMaterial and targetPlant are required for verification.');
+  }
+
+  const isMock = process.env.USE_MOCK_SAP === 'true';
+  const shouldClose = !client && !isMock;
+  const rfc = client || (isMock ? null : await openRfcClient(server || {}));
+
+  try {
+    const cleanSrcMat = String(sourceMaterial || '').trim().toUpperCase();
+    const cleanSrcPlt = String(sourcePlant || '').trim().toUpperCase();
+    const cleanSrcUsg = String(sourceUsage || '1').trim();
+    const cleanSrcAlt = String(sourceAlternative || '1').trim();
+
+    const cleanTgtMat = String(targetMaterial || cleanSrcMat).trim().toUpperCase();
+    const cleanTgtPlt = String(targetPlant || cleanSrcPlt).trim().toUpperCase();
+    const cleanTgtUsg = String(targetUsage || cleanSrcUsg).trim();
+    const cleanTgtAlt = String(targetAlternative || '1').trim();
+
+    // 1. Read Target Hierarchy back from SAP
+    const targetTree = await rfcGetBomDisplayData({
+      material: cleanTgtMat,
+      plant: cleanTgtPlt,
+      bomUsage: cleanTgtUsg,
+      alternativeBom: cleanTgtAlt,
+      multiLevel: true,
+      server,
+      client: rfc
+    });
+
+    if (!targetTree || !targetTree.success || !targetTree.bomExists) {
+      return {
+        success: false,
+        status: 'FAILED',
+        message: targetTree?.message || `Target BOM not found for ${cleanTgtMat} in plant ${cleanTgtPlt} (Alt ${cleanTgtAlt})`,
+        bomsCreated: 0,
+        totalComponents: 0,
+        totalLevels: 0,
+        rootAlternative: cleanTgtAlt,
+        targetHeader: null,
+        verification: {
+          verifiedCount: 0,
+          totalCount: 0,
+          status: 'FAILED',
+          message: 'Target BOM hierarchy could not be read from SAP database',
+          differences: ['Target BOM header not found in SAP database']
+        },
+        groups: [],
+        flatComponents: []
+      };
+    }
+
+    // 2. Read Source Hierarchy from SAP for strict verification
+    let sourceTree = null;
+    if (cleanSrcMat && cleanSrcPlt) {
+      sourceTree = await rfcGetBomDisplayData({
+        material: cleanSrcMat,
+        plant: cleanSrcPlt,
+        bomUsage: cleanSrcUsg,
+        alternativeBom: cleanSrcAlt,
+        multiLevel: true,
+        server,
+        client: rfc
+      });
+    }
+
+    const srcComps = sourceTree?.components || [];
+    const tgtComps = targetTree?.components || [];
+    const differences = [];
+    let verifiedCount = 0;
+
+    // Track matched target components
+    const matchedTargetIndices = new Set();
+
+    for (let sIdx = 0; sIdx < srcComps.length; sIdx++) {
+      const src = srcComps[sIdx];
+      const srcMat = formatMaterialNumber(src.rawComponent || src.component);
+      const srcParent = formatMaterialNumber(src.rawParentMaterial || src.parentMaterial);
+      const srcQty = parseFloat(src.quantity) || 0;
+      const srcUnit = String(src.unit || '').trim().toUpperCase();
+      const srcCat = String(src.itemCategory || 'L').trim().toUpperCase();
+      const srcSub = Boolean(src.hasSubBom);
+
+      // Find best match in target components
+      let bestMatchIdx = -1;
+      for (let tIdx = 0; tIdx < tgtComps.length; tIdx++) {
+        if (matchedTargetIndices.has(tIdx)) continue;
+        const tgt = tgtComps[tIdx];
+        const tgtMat = formatMaterialNumber(tgt.rawComponent || tgt.component);
+        const tgtParent = formatMaterialNumber(tgt.rawParentMaterial || tgt.parentMaterial);
+
+        const isRootLevel = src.level === 1 && tgt.level === 1;
+        const parentMatches = tgtParent === srcParent || isRootLevel;
+        const itemMatches = !src.item || !tgt.item || src.item === tgt.item;
+
+        if (tgtMat === srcMat && tgt.level === src.level && parentMatches && itemMatches) {
+          bestMatchIdx = tIdx;
+          break;
+        }
+      }
+
+      if (bestMatchIdx === -1) {
+        // Fallback match by component material and level with parent match
+        for (let tIdx = 0; tIdx < tgtComps.length; tIdx++) {
+          if (matchedTargetIndices.has(tIdx)) continue;
+          const tgt = tgtComps[tIdx];
+          const tgtMat = formatMaterialNumber(tgt.rawComponent || tgt.component);
+          const tgtParent = formatMaterialNumber(tgt.rawParentMaterial || tgt.parentMaterial);
+          const isRootLevel = src.level === 1 && tgt.level === 1;
+          const parentMatches = tgtParent === srcParent || isRootLevel;
+
+          if (tgtMat === srcMat && tgt.level === src.level && parentMatches) {
+            bestMatchIdx = tIdx;
+            break;
+          }
+        }
+      }
+
+      if (bestMatchIdx === -1) {
+        // Fallback match by component material and level
+        for (let tIdx = 0; tIdx < tgtComps.length; tIdx++) {
+          if (matchedTargetIndices.has(tIdx)) continue;
+          const tgt = tgtComps[tIdx];
+          const tgtMat = formatMaterialNumber(tgt.rawComponent || tgt.component);
+          if (tgtMat === srcMat && tgt.level === src.level) {
+            bestMatchIdx = tIdx;
+            break;
+          }
+        }
+      }
+
+      if (bestMatchIdx === -1) {
+        differences.push(`Missing component ${src.component} (Item ${src.item}) under parent ${src.parentMaterial} at Level ${src.level}`);
+        continue;
+      }
+
+      matchedTargetIndices.add(bestMatchIdx);
+      const tgt = tgtComps[bestMatchIdx];
+      const tgtQty = parseFloat(tgt.quantity) || 0;
+      const tgtUnit = String(tgt.unit || '').trim().toUpperCase();
+      const tgtCat = String(tgt.itemCategory || 'L').trim().toUpperCase();
+      const tgtSub = Boolean(tgt.hasSubBom);
+
+      let itemErrors = [];
+      if (Math.abs(srcQty - tgtQty) > 0.001) {
+        itemErrors.push(`quantity mismatch (source: ${src.quantity}, target: ${tgt.quantity})`);
+      }
+      if (srcUnit && tgtUnit && srcUnit !== tgtUnit) {
+        itemErrors.push(`unit mismatch (source: ${src.unit}, target: ${tgt.unit})`);
+      }
+      if (srcCat && tgtCat && srcCat !== tgtCat) {
+        itemErrors.push(`category mismatch (source: ${src.itemCategory}, target: ${tgt.itemCategory})`);
+      }
+      if (srcSub !== tgtSub) {
+        itemErrors.push(`Sub-BOM mismatch (source: ${srcSub ? 'Sub-BOM' : 'Leaf'}, target: ${tgtSub ? 'Sub-BOM' : 'Leaf'})`);
+      }
+
+      if (itemErrors.length === 0) {
+        verifiedCount++;
+        tgt.isVerified = true;
+      } else {
+        tgt.isVerified = false;
+        tgt.verificationNote = itemErrors.join(', ');
+        differences.push(`Component ${tgt.component} (Item ${tgt.item}): ${itemErrors.join(', ')}`);
+      }
+    }
+
+    // Check for any target components not present in source
+    for (let tIdx = 0; tIdx < tgtComps.length; tIdx++) {
+      if (!matchedTargetIndices.has(tIdx)) {
+        const tgt = tgtComps[tIdx];
+        tgt.isVerified = false;
+        tgt.verificationNote = 'Extra component in target not in source';
+        differences.push(`Extra component ${tgt.component} in target under ${tgt.parentMaterial} at Level ${tgt.level}`);
+      }
+    }
+
+    const totalCount = srcComps.length > 0 ? srcComps.length : tgtComps.length;
+    let status = 'SUCCESS';
+    if (differences.length > 0 || verifiedCount < totalCount) {
+      status = verifiedCount > 0 ? 'PARTIAL' : 'FAILED';
+    }
+
+    const message = status === 'SUCCESS'
+      ? `All ${verifiedCount} components 100% verified against reference BOM.`
+      : (status === 'PARTIAL'
+        ? `Partial verification: ${verifiedCount} of ${totalCount} components verified (${differences.length} difference(s) detected).`
+        : `Verification failed: ${verifiedCount} of ${totalCount} components verified.`);
+
+    // 3. Group target components by Parent BOM
+    const groupsMap = new Map();
+    for (const comp of tgtComps) {
+      const parentKey = String(comp.rawParentMaterial || comp.parentMaterial || cleanTgtMat);
+      if (!groupsMap.has(parentKey)) {
+        groupsMap.set(parentKey, {
+          parentMaterial: comp.parentMaterial || formatMaterialNumber(cleanTgtMat),
+          rawParentMaterial: comp.rawParentMaterial || cleanTgtMat,
+          parentDescription: comp.parentDescription || (parentKey === cleanTgtMat ? targetTree.header?.description : '-'),
+          level: Math.max((comp.level || 1) - 1, 0),
+          bomNumber: targetTree.header?.bomNumber || '-',
+          componentCount: 0,
+          components: []
+        });
+      }
+      const g = groupsMap.get(parentKey);
+      g.componentCount++;
+      g.components.push(comp);
+    }
+
+    const groups = Array.from(groupsMap.values());
+    const maxLevel = tgtComps.length > 0 ? Math.max(...tgtComps.map((c) => c.level || 1)) : 1;
+    const resolvedRootAlt = targetTree.header?.alternative || cleanTgtAlt;
+
+    const totalSourceComponents = srcComps.length > 0 ? srcComps.length : tgtComps.length;
+
+    return {
+      success: status === 'SUCCESS',
+      status, // 'SUCCESS' | 'PARTIAL' | 'FAILED'
+      message,
+      bomsCreated: groups.length,
+      totalComponents: totalSourceComponents,
+      totalLevels: maxLevel,
+      rootAlternative: resolvedRootAlt,
+      targetHeader: targetTree.header,
+      verification: {
+        verifiedCount,
+        totalCount: totalSourceComponents,
+        status,
+        message,
+        differences
+      },
+      groups,
+      flatComponents: tgtComps
+    };
+  } finally {
+    if (shouldClose) {
+      try { await rfc.close(); } catch {}
+    }
+  }
+}
+
 export default {
+  setActiveRfcServer,
+  getActiveRfcServer,
   getRfcConnectionParams,
   openRfcClient,
   formatRfcTableOptions,
   executeRfcFunction,
+  rfcRetryJob,
+  rfcReprocessIdoc,
   pingRfcServer,
   rfcReadBom,
   rfcExplodeBomHierarchy,
@@ -1947,5 +2984,13 @@ export default {
   inspectAndVerifyHierarchy,
   repairHierarchyBottomUp,
   rfcBatchValidateBoms,
-  rfcBatchCopyBoms
+  rfcBatchCopyBoms,
+  rfcGetBomDisplayData,
+  verifyCopiedBomHierarchy,
+  formatMaterialNumber,
+  formatSapDate,
+  batchQueryMakt,
+  batchQuerySubBom,
+  fetchDirectBom,
+  loadMockBoms
 };

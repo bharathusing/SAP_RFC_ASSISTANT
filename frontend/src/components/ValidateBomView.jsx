@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   Search,
@@ -11,6 +11,7 @@ import {
   X
 } from 'lucide-react';
 import { validateSourceBom } from '../services/api';
+import activityTracker from '../services/activityTracker';
 
 export default function ValidateBomView({ systemKey = 'DEV', onBack, onNavigateHome }) {
   const [formData, setFormData] = useState({
@@ -22,6 +23,13 @@ export default function ValidateBomView({ systemKey = 'DEV', onBack, onNavigateH
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    activityTracker.setOperation('validate_bom', isLoading);
+    return () => {
+      activityTracker.setOperation('validate_bom', false);
+    };
+  }, [isLoading]);
 
   const handleValidate = async (e) => {
     e.preventDefault();
@@ -113,7 +121,7 @@ export default function ValidateBomView({ systemKey = 'DEV', onBack, onNavigateH
             <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: '14px 16px', gap: '10px 14px' }}>
               <div className="sap-form-group">
                 <label className="sap-form-label" style={{ fontSize: '11px', marginBottom: 2 }}>
-                  Material Number <span className="sap-required-star" style={{ color: '#ef4444' }}>*</span>
+                  Material Number <span className="sap-required-star" style={{ color: 'var(--sap-error)' }}>*</span>
                 </label>
                 <div className="sap-form-input-wrapper">
                   <Layers size={13} className="input-icon" />
@@ -130,7 +138,7 @@ export default function ValidateBomView({ systemKey = 'DEV', onBack, onNavigateH
 
               <div className="sap-form-group">
                 <label className="sap-form-label" style={{ fontSize: '11px', marginBottom: 2 }}>
-                  Plant Code <span className="sap-required-star" style={{ color: '#ef4444' }}>*</span>
+                  Plant Code <span className="sap-required-star" style={{ color: 'var(--sap-error)' }}>*</span>
                 </label>
                 <div className="sap-form-input-wrapper">
                   <Factory size={13} className="input-icon" />
@@ -173,7 +181,7 @@ export default function ValidateBomView({ systemKey = 'DEV', onBack, onNavigateH
               </div>
             </div>
 
-            <div className="sap-form-actions" style={{ padding: '8px 16px 12px', borderTop: '1px solid #f1f5f9' }}>
+            <div className="sap-form-actions" style={{ padding: '8px 16px 12px', borderTop: '1px solid var(--sap-border-subtle)' }}>
               <button
                 type="button"
                 className="sap-btn sap-btn-secondary"
@@ -213,25 +221,25 @@ export default function ValidateBomView({ systemKey = 'DEV', onBack, onNavigateH
               width: '100%',
               margin: '0 auto',
               padding: '12px 14px',
-              borderRadius: '8px',
-              backgroundColor: result.bomExists ? '#f0fdf4' : '#fffbeb',
-              border: `1px solid ${result.bomExists ? '#86efac' : '#fde68a'}`,
+              borderRadius: 'var(--radius-lg)',
+              backgroundColor: result.bomExists ? 'var(--sap-success-bg)' : 'var(--sap-warning-bg)',
+              border: `1px solid ${result.bomExists ? 'var(--sap-success-border)' : 'var(--sap-warning-border)'}`,
               boxShadow: 'var(--sap-shadow-sm)'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
               {result.bomExists ? (
-                <CheckCircle2 size={16} color="#15803d" />
+                <CheckCircle2 size={16} color="var(--sap-success)" />
               ) : (
-                <AlertTriangle size={16} color="#b45309" />
+                <AlertTriangle size={16} color="var(--sap-warning)" />
               )}
-              <strong style={{ fontSize: '13px', color: result.bomExists ? '#15803d' : '#b45309' }}>
+              <strong style={{ fontSize: '13px', color: result.bomExists ? 'var(--sap-success-text)' : 'var(--sap-warning-text)' }}>
                 {result.bomExists ? 'BOM Exists in SAP' : 'No BOM Found'}
               </strong>
             </div>
-            <p style={{ fontSize: '11.5px', color: '#334155', marginBottom: 10 }}>{result.message}</p>
+            <p style={{ fontSize: '11.5px', color: 'var(--sap-text)', marginBottom: 10 }}>{result.message}</p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, fontSize: '11px', background: '#ffffff', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, fontSize: '11px', background: 'var(--sap-card-bg)', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--sap-border-subtle)' }}>
               <div>Material: <strong>{result.material || formData.material}</strong></div>
               <div>Plant: <strong>{result.plant || formData.plant}</strong></div>
               <div>Components: <strong>{result.componentCount || 0}</strong></div>

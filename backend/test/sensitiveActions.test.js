@@ -14,7 +14,7 @@ let baseUrl;
 function makeRequest(method, path, body = null) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, baseUrl);
-    const headers = {};
+    const headers = { 'Authorization': 'Bearer admin-test-token' };
 
     if (body) {
       headers['Content-Type'] = 'application/json';

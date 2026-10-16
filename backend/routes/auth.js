@@ -1,15 +1,13 @@
 import express from 'express';
 import { loginRateLimiter } from '../middleware/security.js';
 import { requireAuth } from '../middleware/auth.js';
-import { validateSapCredentials } from '../services/sapClient.js';
-import { encryptCredentials } from '../services/encryption.js';
-import { sessionStore } from '../services/sessionStore.js';
-import { getActiveSapUser } from '../services/sapGuiClient.js';
+import { supabaseService } from '../services/supabaseClient.js';
 
 const router = express.Router();
 
-const COOKIE_NAME = 'sap_session_id';
-const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const COOKIE_NAME = 'sb_access_token';
+const LEGACY_COOKIE_NAME = 'sap_session_id';
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * Returns cookie options based on current environment
@@ -27,69 +25,80 @@ function getCookieOptions() {
 
 /**
  * POST /api/auth/login
- * Validates SAP Gateway credentials, encrypts them with AES-256-GCM,
- * stores them in-memory, and returns an HttpOnly session cookie.
+ * Authenticates user via Supabase Auth (or in-memory mock store fallback),
+ * sets HttpOnly session cookies, and returns session token and profile.
  */
 router.post('/login', loginRateLimiter, async (req, res) => {
-  const { username, password } = req.body || {};
+  const { email, username, password } = req.body || {};
+  const userIdentifier = String(email || username || '').trim();
 
-  if (!username || !password) {
+  if (!userIdentifier || !password) {
     return res.status(400).json({
-      error: 'Username and password are required.'
+      error: 'Email and password are required.'
     });
   }
 
   try {
-    // 1. Validate credentials against SAP Gateway (or mock layer)
-    const validationResult = await validateSapCredentials(username, password);
-
-    // 2. Encrypt credentials with AES-256-GCM (server secret key from env)
-    const encrypted = encryptCredentials({
-      username: validationResult.username,
-      password: password
+    const { data, error } = await supabaseService.signInWithPassword({
+      email: userIdentifier,
+      password: String(password)
     });
 
-    // 3. Store in server-side session store with 30-minute TTL
-    const sessionId = sessionStore.createSession(
-      encrypted,
-      validationResult.username,
-      SESSION_TTL_MS
-    );
+    if (error || !data?.session) {
+      return res.status(401).json({
+        error: error?.message || 'Invalid email or password.'
+      });
+    }
 
-    // 4. Return session ID as HttpOnly, Secure, SameSite=Strict cookie
-    res.cookie(COOKIE_NAME, sessionId, getCookieOptions());
+    const { session, user } = data;
+    const token = session.access_token;
+    const cookieOpts = getCookieOptions();
 
-    // 5. Respond with user info (Never expose raw password or encrypted token)
+    // Set secure HttpOnly cookies
+    res.cookie(LEGACY_COOKIE_NAME, token, cookieOpts);
+    res.cookie(COOKIE_NAME, token, cookieOpts);
+
     return res.status(200).json({
       success: true,
-      username: validationResult.username,
-      sapMode: validationResult.mode || (process.env.USE_MOCK_SAP !== 'false' ? 'mock' : 'real')
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      },
+      username: user.email
     });
   } catch (err) {
-    const statusCode = err.status || (err.message.includes('Invalid') ? 401 : 500);
-    return res.status(statusCode).json({
-      error: err.message || 'Authentication failed'
+    console.error('[auth.js] Login failure:', err.message);
+    return res.status(500).json({
+      error: 'Authentication failed: ' + err.message
     });
   }
 });
 
 /**
  * POST /api/auth/logout
- * Destroys session in store and clears HttpOnly session cookie.
+ * Clears HttpOnly session cookies and terminates session.
  */
-router.post('/logout', (req, res) => {
-  const sessionId = req.cookies?.[COOKIE_NAME];
-  if (sessionId) {
-    sessionStore.deleteSession(sessionId);
+router.post('/logout', async (req, res) => {
+  const token = req.cookies?.[COOKIE_NAME] || req.cookies?.[LEGACY_COOKIE_NAME] || (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null);
+  if (token) {
+    try {
+      await supabaseService.signOut(token);
+    } catch (_) {}
   }
 
   const isSecure = process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production';
-  res.clearCookie(COOKIE_NAME, {
+  const clearOpts = {
     httpOnly: true,
     secure: isSecure,
     sameSite: 'strict',
     path: '/'
-  });
+  };
+
+  res.clearCookie(COOKIE_NAME, clearOpts);
+  res.clearCookie(LEGACY_COOKIE_NAME, clearOpts);
+
   return res.status(200).json({
     success: true,
     message: 'Logged out successfully'
@@ -98,29 +107,26 @@ router.post('/logout', (req, res) => {
 
 /**
  * GET /api/auth/config
- * Returns public auth configuration flags (e.g. bypass status, mock mode).
- * Never exposes credentials or secrets.
+ * Returns public auth configuration flags.
  */
 router.get('/config', (req, res) => {
-  const isBypassed = process.env.SKIP_GATEWAY_AUTH === 'true';
   return res.status(200).json({
-    skipGatewayAuth: isBypassed,
-    bypassUser: process.env.GATEWAY_BYPASS_USER || getActiveSapUser() || 'LEELAM_EXT',
+    authMode: 'supabase',
+    skipGatewayAuth: false,
     mockMode: process.env.USE_MOCK_SAP !== 'false'
   });
 });
 
 /**
  * GET /api/auth/me
- * Checks session status and returns current user identity.
+ * Returns current authenticated user profile from verified Supabase session token.
  */
 router.get('/me', requireAuth, (req, res) => {
-  const isBypassed = process.env.SKIP_GATEWAY_AUTH === 'true';
   return res.status(200).json({
     authenticated: true,
-    username: req.sapSession.username,
-    sapMode: isBypassed ? 'gui-only' : (process.env.USE_MOCK_SAP !== 'false' ? 'mock' : 'real'),
-    skipGatewayAuth: isBypassed
+    user: req.user,
+    username: req.user.email,
+    role: req.user.role
   });
 });
 

@@ -59,7 +59,7 @@ export default function FilterRange({ currentFilter, onApplyFilter, isLoading })
             />
           </div>
 
-          <div style={{ paddingBottom: 8, color: '#94a3b8' }}>
+          <div style={{ paddingBottom: 8, color: 'var(--sap-text-subtle)' }}>
             <ArrowRight size={18} />
           </div>
 
@@ -110,10 +110,10 @@ export default function FilterRange({ currentFilter, onApplyFilter, isLoading })
         {hasActiveFilter && (
           <div style={{
             fontSize: '12px',
-            color: '#0070f2',
-            background: '#e6f4ff',
+            color: 'var(--sap-primary)',
+            background: 'var(--sap-primary-light)',
             padding: '6px 12px',
-            borderRadius: '4px',
+            borderRadius: 'var(--sap-radius)',
             fontWeight: 500
           }}>
             Active OData $filter: BusinessPartner range

@@ -4,10 +4,21 @@
  */
 
 export const SYSTEM_REGISTRY = {
+  SANDBOX: {
+    key: 'SANDBOX',
+    label: 'Sandbox (SANDBOX)',
+    description: 'Isolated sandbox environment for testing and experimentation',
+    get baseUrl() {
+      return process.env.SAP_SANDBOX_URL || process.env.SAP_DEV_URL;
+    },
+    client: '100',
+    isProd: false,
+    requiresDoubleConfirmation: false
+  },
   DEV: {
     key: 'DEV',
     label: 'Development (DEV)',
-    description: 'Development sandbox and unit testing environment',
+    description: 'Development and unit testing environment',
     get baseUrl() {
       return process.env.SAP_DEV_URL;
     },

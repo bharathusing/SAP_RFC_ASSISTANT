@@ -17,7 +17,9 @@ let baseUrl;
 function makeRequest(method, path, body = null, cookie = null) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, baseUrl);
-    const headers = {};
+    const headers = {
+      'Authorization': 'Bearer admin-test-token'
+    };
 
     if (body) {
       headers['Content-Type'] = 'application/json';
@@ -69,7 +71,7 @@ async function runWriteActionTests() {
   const originalPost = axios.post;
   const prevKey = process.env.OPENROUTER_API_KEY;
   process.env.OPENROUTER_API_KEY = 'test_openrouter_api_key_valid';
-  process.env.OPENROUTER_MODEL = 'test_model';
+  process.env.USE_MOCK_SAP = 'true';
 
   try {
     // Reset data and logs

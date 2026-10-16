@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Trash2,
   CheckCircle2,
@@ -10,6 +10,7 @@ import {
 import DeleteBomForm from './DeleteBomForm';
 import ConfirmationCard from './ConfirmationCard';
 import { sendChatMessage, confirmChatAction, cancelChatAction } from '../services/api';
+import activityTracker from '../services/activityTracker';
 
 export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHome }) {
   const [proposedAction, setProposedAction] = useState(null);
@@ -18,6 +19,17 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHom
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastSubmittedForm, setLastSubmittedForm] = useState(null);
+
+  useEffect(() => {
+    activityTracker.setOperation('delete_bom', isSubmitting || actionStatus === 'executing');
+    return () => activityTracker.setOperation('delete_bom', false);
+  }, [isSubmitting, actionStatus]);
+
+  useEffect(() => {
+    const isPending = Boolean(proposedAction && actionStatus === 'pending');
+    activityTracker.setConfirmation('delete_bom', isPending);
+    return () => activityTracker.setConfirmation('delete_bom', false);
+  }, [proposedAction, actionStatus]);
 
   const handleFormSubmit = async (formData) => {
     setErrorMessage('');
@@ -164,7 +176,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHom
         {proposedAction && !executionResult && (
           <div className="sap-proposal-view-section" style={{ maxWidth: 680, width: '100%', margin: '0 auto' }}>
             <div className="sap-proposal-header-card danger">
-              <ShieldCheck size={20} color="#bb0000" />
+              <ShieldCheck size={20} color="var(--sap-error)" />
               <div>
                 <h4>Safety Gate: Confirm Permanent BOM Deletion</h4>
                 <p>Deleting a BOM removes the alternative from SAP master records. Review carefully before confirming.</p>
@@ -186,7 +198,7 @@ export default function DeleteBomView({ systemKey = 'DEV', onBack, onNavigateHom
             <div className="sap-result-success-card">
               <div className="sap-result-success-header">
                 <div className="sap-result-success-icon">
-                  <CheckCircle2 size={32} color="#107e3e" />
+                  <CheckCircle2 size={32} color="var(--sap-success)" />
                 </div>
                 <div>
                   <h3 className="sap-result-success-title">BOM Deleted Successfully</h3>

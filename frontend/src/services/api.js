@@ -13,19 +13,62 @@ const apiClient = axios.create({
 });
 
 /**
- * Validates credentials via backend SAP authentication endpoint.
- * Never stores or exposes raw password to frontend state.
+ * Updates Authorization Bearer header and synchronizes with localStorage
  */
-export async function loginUser(username, password) {
-  const response = await apiClient.post('/auth/login', { username, password });
+export function setAuthToken(token) {
+  if (token) {
+    try { localStorage.setItem('sb_token', token); } catch (_) {}
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    try { localStorage.removeItem('sb_token'); } catch (_) {}
+    delete apiClient.defaults.headers.common['Authorization'];
+  }
+}
+
+/**
+ * Updates x-server-id header and synchronizes with localStorage
+ */
+export function setSelectedServerHeader(serverId) {
+  if (serverId) {
+    try { localStorage.setItem('selected_server_id', serverId); } catch (_) {}
+    apiClient.defaults.headers.common['x-server-id'] = serverId;
+  } else {
+    try { localStorage.removeItem('selected_server_id'); } catch (_) {}
+    delete apiClient.defaults.headers.common['x-server-id'];
+  }
+}
+
+// Restore saved session token and server ID on startup
+try {
+  const savedToken = localStorage.getItem('sb_token');
+  if (savedToken) {
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+  }
+  const savedServerId = localStorage.getItem('selected_server_id');
+  if (savedServerId) {
+    apiClient.defaults.headers.common['x-server-id'] = savedServerId;
+  }
+} catch (_) {}
+
+/**
+ * Validates credentials via Supabase authentication endpoint.
+ * Stores token in client state.
+ */
+export async function loginUser(email, password) {
+  const response = await apiClient.post('/auth/login', { email, username: email, password });
+  if (response.data?.token) {
+    setAuthToken(response.data.token);
+  }
   return response.data;
 }
 
 /**
- * Logs out user, invalidating session in backend and clearing cookie.
+ * Logs out user, invalidating session in backend and clearing tokens.
  */
 export async function logoutUser() {
   const response = await apiClient.post('/auth/logout');
+  setAuthToken(null);
+  setSelectedServerHeader(null);
   return response.data;
 }
 
@@ -210,20 +253,26 @@ export async function downloadBomTemplate() {
 }
 
 /**
- * Fetches current SAP GUI session health and connectivity status.
+ * Fetches current SAP GUI or RFC session health and connectivity status.
+ * @param {string} [serverId]
  * @returns {Promise<{ connected: boolean, status: string, system?: string, client?: string, user?: string, message?: string, code?: string, selectedSessionId?: string, sessions?: Array<object> }>}
  */
-export async function getSapSessionStatus() {
-  const response = await apiClient.get('/sap/session-status');
+export async function getSapSessionStatus(serverId) {
+  const sid = serverId || (typeof localStorage !== 'undefined' ? localStorage.getItem('selected_server_id') : null);
+  const config = sid ? { params: { serverId: sid }, headers: { 'x-server-id': sid } } : {};
+  const response = await apiClient.get('/sap/session-status', config);
   return response.data;
 }
 
 /**
  * Fetches all available SAP GUI sessions and active selection.
+ * @param {string} [serverId]
  * @returns {Promise<{ success: boolean, selectedSessionId: string|null, selectedUser: string|null, sessions: Array<object>, status?: string, connected?: boolean }>}
  */
-export async function getSapSessions() {
-  const response = await apiClient.get('/sap/sessions');
+export async function getSapSessions(serverId) {
+  const sid = serverId || (typeof localStorage !== 'undefined' ? localStorage.getItem('selected_server_id') : null);
+  const config = sid ? { params: { serverId: sid }, headers: { 'x-server-id': sid } } : {};
+  const response = await apiClient.get('/sap/sessions', config);
   return response.data;
 }
 
@@ -252,6 +301,93 @@ export async function readBom(params) {
  */
 export async function explodeBomHierarchy(params) {
   const response = await apiClient.post('/bom/hierarchy', params);
+  return response.data;
+}
+
+/**
+ * Reads back and strictly verifies the copied BOM hierarchy from SAP database.
+ * @param {object} params
+ */
+export async function verifyCopiedBom(params) {
+  const response = await apiClient.post('/bom/verify-copy', params);
+  return response.data;
+}
+
+/**
+ * Retrieves list of active SAP servers the logged-in user is permitted to access.
+ */
+export async function getAvailableServers() {
+  const response = await apiClient.get('/servers/available');
+  return response.data?.servers || [];
+}
+
+/**
+ * Retrieves list of enabled modules for a specific SAP server.
+ */
+export async function getServerModules(serverId) {
+  if (!serverId) return [];
+  const response = await apiClient.get(`/servers/${serverId}/modules`);
+  return response.data?.modules || [];
+}
+
+/**
+ * ============================================================================
+ * ADMIN MANAGEMENT API METHODS (Role: admin required)
+ * ============================================================================
+ */
+
+export async function getAdminUsers() {
+  const response = await apiClient.get('/admin/users');
+  return response.data?.users || [];
+}
+
+export async function createAdminUser(userData) {
+  const response = await apiClient.post('/admin/users', userData);
+  return response.data;
+}
+
+export async function deleteAdminUser(id) {
+  const response = await apiClient.delete(`/admin/users/${id}`);
+  return response.data;
+}
+
+export async function getAdminServers() {
+  const response = await apiClient.get('/admin/servers');
+  return response.data?.servers || [];
+}
+
+export async function createAdminServer(serverData) {
+  const response = await apiClient.post('/admin/servers', serverData);
+  return response.data;
+}
+
+export async function updateAdminServer(id, serverData) {
+  const response = await apiClient.put(`/admin/servers/${id}`, serverData);
+  return response.data;
+}
+
+export async function deleteAdminServer(id) {
+  const response = await apiClient.delete(`/admin/servers/${id}`);
+  return response.data;
+}
+
+export async function testServerConnection(connectionData) {
+  const response = await apiClient.post('/admin/servers/test-connection', connectionData);
+  return response.data;
+}
+
+export async function getAdminPermissions() {
+  const response = await apiClient.get('/admin/permissions');
+  return response.data?.permissions || [];
+}
+
+export async function grantAdminPermission(permissionData) {
+  const response = await apiClient.post('/admin/permissions', permissionData);
+  return response.data;
+}
+
+export async function revokeAdminPermission(id) {
+  const response = await apiClient.delete(`/admin/permissions/${id}`);
   return response.data;
 }
 

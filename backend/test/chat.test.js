@@ -9,13 +9,16 @@ import { isPseudoToolCallContent, validateToolArgs } from '../routes/chat.js';
 let server;
 let baseUrl;
 
-function makeRequest(method, path, body = null) {
+function makeRequest(method, path, body = null, token = 'admin-test-token') {
   return new Promise((resolve, reject) => {
     const url = new URL(path, baseUrl);
     const headers = {};
 
     if (body) {
       headers['Content-Type'] = 'application/json';
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     const req = http.request(url, { method, headers }, (res) => {
@@ -47,6 +50,7 @@ function makeRequest(method, path, body = null) {
 }
 
 async function runChatTests() {
+  process.env.USE_MOCK_SAP = 'true';
   console.log('\n--- Starting Dynamic Schema-Aware Chat & Tool Test Suite ---\n');
 
   // 1. Schema integrity & prompt check

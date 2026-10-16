@@ -215,7 +215,7 @@ export default function EntityTable({
       if (isJobData) {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Activity size={16} color="#0070f2" style={{ flexShrink: 0 }} />
+            <Activity size={16} color="var(--sap-primary)" style={{ flexShrink: 0 }} />
             <span style={{ fontWeight: 500 }}>{rawVal}</span>
           </div>
         );
@@ -223,7 +223,7 @@ export default function EntityTable({
       if (isIdocData) {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <FileText size={16} color="#0284c7" style={{ flexShrink: 0 }} />
+            <FileText size={16} color="var(--sap-primary)" style={{ flexShrink: 0 }} />
             <span style={{ fontWeight: 500 }}>{rawVal}</span>
           </div>
         );
@@ -231,7 +231,7 @@ export default function EntityTable({
       if (isLogData) {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ListOrdered size={16} color="#7c3aed" style={{ flexShrink: 0 }} />
+            <ListOrdered size={16} color="var(--sap-admin-pill-bg)" style={{ flexShrink: 0 }} />
             <span style={{ fontWeight: 500 }}>{rawVal}</span>
           </div>
         );
@@ -239,7 +239,7 @@ export default function EntityTable({
       if (isInterfaceData) {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Network size={16} color="#059669" style={{ flexShrink: 0 }} />
+            <Network size={16} color="var(--sap-success)" style={{ flexShrink: 0 }} />
             <span style={{ fontWeight: 500 }}>{rawVal}</span>
           </div>
         );
@@ -247,7 +247,7 @@ export default function EntityTable({
       if (isBomData) {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <FileSpreadsheet size={16} color="#059669" style={{ flexShrink: 0 }} />
+            <FileSpreadsheet size={16} color="var(--sap-success)" style={{ flexShrink: 0 }} />
             <span style={{ fontWeight: 500 }}>{rawVal}</span>
           </div>
         );
@@ -256,9 +256,9 @@ export default function EntityTable({
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isOrg ? (
-            <Building2 size={16} color="#0369a1" style={{ flexShrink: 0 }} />
+            <Building2 size={16} color="var(--sap-primary)" style={{ flexShrink: 0 }} />
           ) : (
-            <UserCircle size={16} color="#7e22ce" style={{ flexShrink: 0 }} />
+            <UserCircle size={16} color="var(--sap-admin-pill-bg)" style={{ flexShrink: 0 }} />
           )}
           <span style={{ fontWeight: 500 }}>{rawVal}</span>
         </div>
@@ -307,7 +307,7 @@ export default function EntityTable({
     if (col.name === 'retryCount') {
       const num = Number(rawVal) || 0;
       return (
-        <span style={{ fontWeight: 600, color: num > 0 ? '#b45309' : 'var(--sap-text-muted)' }}>
+        <span style={{ fontWeight: 600, color: num > 0 ? 'var(--sap-warning)' : 'var(--sap-text-muted)' }}>
           {rawVal}
         </span>
       );
@@ -332,9 +332,9 @@ export default function EntityTable({
       <div className="sap-table-title-bar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {isBomData ? (
-            <FileSpreadsheet size={18} color="#059669" />
+            <FileSpreadsheet size={18} color="var(--sap-success)" />
           ) : (
-            <Database size={18} color="#0070f2" />
+            <Database size={18} color="var(--sap-primary)" />
           )}
           <h3 style={{ fontSize: '16px', fontWeight: 600 }}>
             {title || entityLabel}
@@ -362,7 +362,7 @@ export default function EntityTable({
       </div>
 
       {/* Table Body */}
-      <div className="sap-table-container">
+      <div className="sap-table-container" tabIndex={0} role="region" aria-label={`${entityLabel} Table`}>
         {isLoading ? (
           <div className="sap-loading-state">
             <span className="sap-spinner sap-spinner-blue" style={{ width: 32, height: 32, borderWidth: 3 }} />
@@ -370,7 +370,7 @@ export default function EntityTable({
           </div>
         ) : data.length === 0 ? (
           <div className="sap-empty-state">
-            <FileSpreadsheet size={40} color="#94a3b8" />
+            <FileSpreadsheet size={40} color="var(--sap-text-subtle)" />
             <p style={{ fontWeight: 600, fontSize: '15px' }}>No Records Found</p>
             <p style={{ fontSize: '13px' }}>
               No {entityLabel.toLowerCase()} match the current criteria.

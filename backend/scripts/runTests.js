@@ -22,11 +22,18 @@ const testFiles = [
   'test/bomDiscrepancyFixes.test.js',
   'test/crossPlantAlternativeFix.test.js',
   'test/vbsSyntaxValidation.test.js',
-  'test/materialCheck.test.js'
+  'test/materialCheck.test.js',
+  'test/adminAuthPermissions.test.js',
+  'test/moduleAccess.test.js',
+  'test/sapCredentials.test.js',
+  'test/serverCreationResilience.test.js',
+  'test/bomDisplayEnrichment.test.js',
+  'test/copyBomResultEnrichment.test.js'
 ];
 
 const env = {
   ...process.env,
+  NODE_ENV: 'test',
   USE_MOCK_SAP: 'true'
 };
 

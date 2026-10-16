@@ -7,6 +7,7 @@ import ConfirmationCard from './ConfirmationCard';
 import CreateBomForm from './CreateBomForm';
 import DeleteBomForm from './DeleteBomForm';
 import BulkBomCopyModal from './BulkBomCopyModal';
+import activityTracker from '../services/activityTracker';
 
 const INITIAL_GREETING = {
   id: 'welcome',
@@ -25,6 +26,13 @@ export default function ChatBox({ isActive = true, onActionExecuted, systemKey =
 
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    activityTracker.setOperation('chat_ai', isLoading);
+    return () => {
+      activityTracker.setOperation('chat_ai', false);
+    };
+  }, [isLoading]);
 
   // Auto-scroll to bottom of chat when new messages arrive or when tab becomes active
   useEffect(() => {
@@ -553,7 +561,7 @@ export default function ChatBox({ isActive = true, onActionExecuted, systemKey =
       <div className="sap-chat-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div className="sap-chat-bot-icon">
-            <Bot size={20} color="#fff" />
+            <Bot size={20} color="var(--sap-shell-text)" />
           </div>
           <div>
             <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--sap-text)' }}>
@@ -595,7 +603,7 @@ export default function ChatBox({ isActive = true, onActionExecuted, systemKey =
               className={`sap-chat-message-row ${isUser ? 'user-row' : 'assistant-row'}`}
             >
               <div className="sap-chat-avatar">
-                {isUser ? <User size={16} color="#0070f2" /> : <Bot size={16} color="#0070f2" />}
+                {isUser ? <User size={16} color="var(--sap-primary)" /> : <Bot size={16} color="var(--sap-primary)" />}
               </div>
 
               <div className="sap-chat-bubble-container">
@@ -669,7 +677,7 @@ export default function ChatBox({ isActive = true, onActionExecuted, systemKey =
         {isLoading && (
           <div className="sap-chat-message-row assistant-row">
             <div className="sap-chat-avatar">
-              <Bot size={16} color="#0070f2" />
+              <Bot size={16} color="var(--sap-primary)" />
             </div>
             <div className="sap-chat-bubble assistant-bubble" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="sap-spinner sap-spinner-blue" style={{ width: 14, height: 14 }} />
@@ -686,7 +694,7 @@ export default function ChatBox({ isActive = true, onActionExecuted, systemKey =
       {/* Quick Suggestion Actions (Create BOM & Delete BOM only) */}
       <div className="sap-chat-suggestions">
         <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--sap-text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Sparkles size={12} color="#0070f2" />
+          <Sparkles size={12} color="var(--sap-primary)" />
           Quick Actions:
         </span>
         <button
@@ -695,7 +703,7 @@ export default function ChatBox({ isActive = true, onActionExecuted, systemKey =
           onClick={() => triggerStructuredAction('create_bom')}
           disabled={isLoading}
         >
-          <Copy size={13} color="#0070f2" />
+          <Copy size={13} color="var(--sap-primary)" />
           <span>Copy BOM</span>
           <ArrowUpRight size={12} />
         </button>
@@ -704,9 +712,9 @@ export default function ChatBox({ isActive = true, onActionExecuted, systemKey =
           className="sap-chat-suggestion-chip"
           onClick={() => triggerStructuredAction('bulk_bom_copy')}
           disabled={isLoading}
-          style={{ background: '#f0fdf4', borderColor: '#bbf7d0', color: '#166534' }}
+          style={{ background: 'var(--sap-success-bg)', borderColor: 'var(--sap-success-border)', color: 'var(--sap-success-text)' }}
         >
-          <FileSpreadsheet size={13} color="#16a34a" />
+          <FileSpreadsheet size={13} color="var(--sap-success)" />
           <span>Bulk Copy (Excel)</span>
           <ArrowUpRight size={12} />
         </button>
@@ -716,7 +724,7 @@ export default function ChatBox({ isActive = true, onActionExecuted, systemKey =
           onClick={() => triggerStructuredAction('delete_bom')}
           disabled={isLoading}
         >
-          <Trash2 size={13} color="#bb0000" />
+          <Trash2 size={13} color="var(--sap-error)" />
           <span>Delete BOM</span>
           <ArrowUpRight size={12} />
         </button>

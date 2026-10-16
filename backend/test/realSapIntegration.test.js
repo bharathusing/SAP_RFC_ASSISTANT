@@ -29,7 +29,10 @@ let baseUrl;
 function makeRequest(method, path, body = null, cookie = null) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, baseUrl);
-    const headers = {};
+    const headers = {
+      'Authorization': 'Bearer admin-test-token',
+      'x-server-id': '10000000-0000-0000-0000-000000000001'
+    };
 
     if (body) {
       headers['Content-Type'] = 'application/json';

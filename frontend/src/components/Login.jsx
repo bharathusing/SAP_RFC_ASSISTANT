@@ -1,25 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, Lock, User, AlertCircle, Server, KeyRound, Info } from 'lucide-react';
-import { loginUser, getAuthConfig } from '../services/api';
+import React, { useState } from 'react';
+import { Eye, EyeOff, Lock, Mail, AlertCircle, ShieldCheck } from 'lucide-react';
+import { loginUser } from '../services/api';
+import nextItPointLogo from '../assets/next_it_point_logo.png';
 
-export default function Login({ onLoginSuccess, authConfig }) {
-  const [config, setConfig] = useState(authConfig || null);
-  const [username, setUsername] = useState('');
+export default function Login({ onLoginSuccess }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  useEffect(() => {
-    if (!config) {
-      getAuthConfig().then(setConfig).catch(() => {});
-    }
-  }, [config]);
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setErrorMessage('Please enter both SAP username and password.');
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password.trim()) {
+      setErrorMessage('Please enter both your email address and password.');
       return;
     }
 
@@ -27,28 +22,30 @@ export default function Login({ onLoginSuccess, authConfig }) {
     setErrorMessage('');
 
     try {
-      const result = await loginUser(username.trim(), password);
+      const result = await loginUser(cleanEmail, password);
       // Immediately clear raw password from component state
       setPassword('');
-      if (result.success) {
-        onLoginSuccess({
-          username: result.username,
-          sapMode: result.sapMode
-        });
+      if (result.success && result.user) {
+        onLoginSuccess(result.user);
+      } else {
+        setErrorMessage(result.error || 'Login failed. Please check your credentials.');
       }
     } catch (err) {
-      setPassword(''); // Never keep failed password in state
+      setPassword(''); // Never preserve failed password in state
       if (err.response?.status === 429) {
         setErrorMessage(
           err.response?.data?.error ||
-          'Too many login attempts. The endpoint is rate-limited for security. Please wait before trying again.'
+          'Too many login attempts. Please wait a moment before trying again.'
         );
       } else if (err.response?.status === 401) {
-        setErrorMessage('Invalid SAP Gateway credentials. Please verify your username and password.');
+        setErrorMessage(
+          err.response?.data?.error ||
+          'Invalid email or password. Please verify your credentials or contact your administrator.'
+        );
       } else {
         setErrorMessage(
           err.response?.data?.error ||
-          'Connection to SAP backend service failed. Please ensure backend is running.'
+          'Connection to authentication service failed. Please check network connectivity.'
         );
       }
     } finally {
@@ -56,156 +53,128 @@ export default function Login({ onLoginSuccess, authConfig }) {
     }
   };
 
-  const handleFillDemo = () => {
-    setUsername('SAP_CONSULTANT');
-    setPassword('Init@2026');
-    setErrorMessage('');
-  };
-
   return (
     <div className="sap-login-viewport">
-      <div className="sap-login-card">
-        <div className="sap-login-header">
-          <div style={{
-            background: '#0070f2',
-            borderRadius: 8,
-            width: 44,
-            height: 44,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <Server size={24} color="#fff" />
+      {/* Top Shell Header with Next IT Point Brand Logo (Identical to Dashboard) */}
+      <header className="sap-shell-header">
+        <div className="sap-brand">
+          <div className="sap-brand-logo-container">
+            <img src={nextItPointLogo} alt="Next IT Point Logo" className="sap-brand-logo-img" />
           </div>
-          <div>
-            <h2>SAP Gateway Login</h2>
-            <p>S/4HANA OData Service Authentication</p>
-          </div>
+          <span className="sap-brand-divider">|</span>
+          <span className="sap-brand-title">SAP AI Operations Assistant</span>
         </div>
+      </header>
 
-        <form onSubmit={handleSubmit} className="sap-login-body">
-          {errorMessage && (
-            <div className="sap-alert sap-alert-error" role="alert">
-              <AlertCircle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-              <div>{errorMessage}</div>
+      {/* Main Login Canvas Body */}
+      <div className="sap-login-canvas">
+        <div className="sap-login-card">
+          <div className="sap-login-header">
+            <div className="sap-login-icon-box">
+              <ShieldCheck size={24} color="var(--sap-primary)" />
             </div>
-          )}
+            <div>
+              <h2>SAP Enterprise Portal</h2>
+              <p>Sign in with your Next IT Point credentials</p>
+            </div>
+          </div>
 
-          <div className="sap-alert sap-alert-info">
-            <Info size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-            <div style={{ fontSize: '12px' }}>
-              {config?.mockMode ? (
+          <form onSubmit={handleSubmit} className="sap-login-body">
+            {errorMessage && (
+              <div className="sap-alert sap-alert-error" role="alert">
+                <AlertCircle size={17} style={{ flexShrink: 0, marginTop: 1 }} />
+                <div>{errorMessage}</div>
+              </div>
+            )}
+
+            <div className="sap-form-group">
+              <label className="sap-form-label" htmlFor="sap-email">
+                Email Address
+              </label>
+              <div className="sap-input-group">
+                <span className="sap-input-icon-left" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--sap-text-muted)', pointerEvents: 'none' }}>
+                  <Mail size={15} />
+                </span>
+                <input
+                  id="sap-email"
+                  type="email"
+                  className="sap-input"
+                  style={{ paddingLeft: 36 }}
+                  placeholder="e.g. user@nextitpoint.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="email"
+                  autoFocus
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="sap-form-group">
+              <label className="sap-form-label" htmlFor="sap-password">
+                Password
+              </label>
+              <div className="sap-input-group">
+                <span className="sap-input-icon-left" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--sap-text-muted)', pointerEvents: 'none' }}>
+                  <Lock size={15} />
+                </span>
+                <input
+                  id="sap-password"
+                  type={showPassword ? 'text' : 'password'}
+                  className="sap-input"
+                  style={{ paddingLeft: 36, paddingRight: 40 }}
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="sap-input-addon-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="sap-btn sap-btn-primary"
+              disabled={isLoading}
+              style={{ width: '100%', height: 38, fontSize: 13, marginTop: 4, fontWeight: 600 }}
+            >
+              {isLoading ? (
                 <>
-                  <strong>Mock Gateway Active (Demo Credentials Available)</strong>
-                  <div style={{ marginTop: 2, color: '#334155' }}>
-                    Simulated SAP OData environment. Click below to fill demo credentials or enter custom test credentials.
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleFillDemo}
-                    style={{
-                      color: '#0070f2',
-                      fontWeight: 600,
-                      marginTop: 6,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      fontSize: '12px',
-                      textDecoration: 'underline'
-                    }}
-                  >
-                    <KeyRound size={13} />
-                    Quick-fill Demo Credentials
-                  </button>
+                  <span className="sap-spinner" style={{ width: 14, height: 14 }} />
+                  <span>Signing in...</span>
                 </>
               ) : (
                 <>
-                  <strong>Live SAP Gateway Authentication</strong>
-                  <div style={{ marginTop: 2, color: '#334155' }}>
-                    Enter your SAP NetWeaver / S/4HANA credentials to authenticate against the live OData service.
-                  </div>
+                  <Lock size={15} />
+                  <span>Sign In</span>
                 </>
               )}
+            </button>
+
+            <div style={{
+              textAlign: 'center',
+              fontSize: '11px',
+              color: 'var(--sap-text-subtle)',
+              marginTop: 6,
+              lineHeight: 1.45
+            }}>
+              Protected by Supabase Auth with per-server role permissions.
+              <br />
+              Accounts are provisioned and managed by administrators.
             </div>
-          </div>
-
-          <div className="sap-form-group">
-            <label className="sap-form-label" htmlFor="sap-username">
-              SAP Username
-            </label>
-            <div className="sap-input-group">
-              <input
-                id="sap-username"
-                type="text"
-                className="sap-input"
-                placeholder="e.g. S4H_USER or CONSULTANT"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                disabled={isLoading}
-                autoComplete="username"
-                autoFocus
-              />
-            </div>
-          </div>
-
-          <div className="sap-form-group">
-            <label className="sap-form-label" htmlFor="sap-password">
-              SAP Password
-            </label>
-            <div className="sap-input-group">
-              <input
-                id="sap-password"
-                type={showPassword ? 'text' : 'password'}
-                className="sap-input"
-                placeholder="Enter SAP Gateway password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                className="sap-input-addon-btn"
-                onClick={() => setShowPassword(!showPassword)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="sap-btn sap-btn-primary"
-            disabled={isLoading}
-            style={{ width: '100%', height: 42, fontSize: 14, marginTop: 6 }}
-          >
-            {isLoading ? (
-              <>
-                <span className="sap-spinner" />
-                <span>Authenticating with SAP...</span>
-              </>
-            ) : (
-              <>
-                <Lock size={16} />
-                <span>Log In to Gateway</span>
-              </>
-            )}
-          </button>
-
-          <div style={{
-            textAlign: 'center',
-            fontSize: '11px',
-            color: '#94a3b8',
-            marginTop: 4,
-            lineHeight: 1.4
-          }}>
-            Protected by AES-256 encrypted session store &amp; HttpOnly cookies.
-            <br />
-            Browser never communicates directly with SAP Gateway.
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );

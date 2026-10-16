@@ -44,7 +44,8 @@ async function handleMaterialCheck(req, res) {
           ? await rfcReadBom({
               material: bomMaterial,
               plant: String(plant).trim(),
-              bomUsage: String(bomUsage).trim()
+              bomUsage: String(bomUsage).trim(),
+              server: req.selectedServer
             })
           : await verifyBomInCs03({
               material: bomMaterial,

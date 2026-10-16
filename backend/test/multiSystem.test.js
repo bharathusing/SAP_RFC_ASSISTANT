@@ -20,7 +20,10 @@ let baseUrl;
 function makeRequest(method, path, body = null) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, baseUrl);
-    const headers = {};
+    const headers = {
+      'Authorization': 'Bearer admin-test-token',
+      'x-server-id': '10000000-0000-0000-0000-000000000001'
+    };
 
     if (body) {
       headers['Content-Type'] = 'application/json';
@@ -78,7 +81,8 @@ async function runMultiSystemTests() {
     console.log('1. Testing System Registry Configuration:');
     assert.strictEqual(DEFAULT_SYSTEM, 'DEV');
     const systems = listSystems();
-    assert.strictEqual(systems.length, 3, 'Must support 3 standard environments (DEV, QA, PROD)');
+    assert.strictEqual(systems.length, 4, 'Must support 4 standard environments (SANDBOX, DEV, QA, PROD)');
+    assert(isValidSystemKey('SANDBOX'));
     assert(isValidSystemKey('DEV'));
     assert(isValidSystemKey('QA'));
     assert(isValidSystemKey('PROD'));
@@ -105,7 +109,7 @@ async function runMultiSystemTests() {
     const sysRes = await makeRequest('GET', '/api/systems');
     assert.strictEqual(sysRes.status, 200);
     assert.strictEqual(sysRes.data.defaultSystem, 'DEV');
-    assert.strictEqual(sysRes.data.systems.length, 3);
+    assert.strictEqual(sysRes.data.systems.length, 4);
     console.log('   ✓ /api/systems returned registered system environments');
 
     // 4. PROD Safeguard: Double-Confirmation Keyword 'CONFIRM'

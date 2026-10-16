@@ -14,9 +14,13 @@ import knowledgeBaseRoutes from './routes/knowledgeBase.js';
 import bomRoutes from './routes/bom.js';
 import sapRoutes from './routes/sap.js';
 import materialCheckRoutes from './routes/materialCheck.js';
+import adminRoutes from './routes/admin.js';
+import { requireAuth } from './middleware/auth.js';
+import { supabaseService, verifyDatabaseConfiguration } from './services/supabaseClient.js';
 import { enforceHttps, safeLogger } from './middleware/security.js';
 import { verifyAllToolsSafety } from './config/riskLevels.js';
 import { listSystems, DEFAULT_SYSTEM, getSystemConfig } from './config/systemRegistry.js';
+import { validateEncryptionKey } from './utils/crypto.js';
 
 // Load environment configuration
 dotenv.config();
@@ -24,6 +28,17 @@ console.log("SAP_DEV_URL loaded as:", process.env.SAP_DEV_URL);
 
 // Startup safety verification: Strictly enforce Level 4 tool blocking and confirmation gates
 verifyAllToolsSafety(TOOLS);
+
+// Security startup check: Validate AES-256-GCM encryption key is configured
+validateEncryptionKey(true);
+
+// Database startup check: Verify Supabase configuration outside of test mode
+try {
+  verifyDatabaseConfiguration();
+} catch (err) {
+  console.error('Fatal database startup error:', err.message);
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -43,11 +58,12 @@ app.use(cors({
   origin: FRONTEND_URL,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-server-id', 'X-Server-Id']
 }));
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/business-partners', businessPartnerRoutes);
 app.use('/api/entities', entitiesRoutes);
 app.use('/api/chat', chatRoutes);
@@ -56,6 +72,48 @@ app.use('/api/knowledge-base', knowledgeBaseRoutes);
 app.use('/api/bom', bomRoutes);
 app.use('/api/sap', sapRoutes);
 app.use('/api/materials', materialCheckRoutes);
+
+// Server Permission & Discovery endpoint (returns permitted servers for logged-in user)
+app.get('/api/servers/available', requireAuth, async (req, res) => {
+  try {
+    const servers = await supabaseService.getAvailableServersForUser(req.user.id, req.user.role);
+    return res.status(200).json({
+      success: true,
+      servers
+    });
+  } catch (err) {
+    console.error('Error fetching available servers:', err.message);
+    return res.status(500).json({ error: 'Failed to retrieve permitted servers' });
+  }
+});
+
+// Server Modules endpoint: Returns enabled modules for a server the user can access
+app.get('/api/servers/:id/modules', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const accessCheck = await supabaseService.checkUserServerAccess(
+      req.user.id,
+      id,
+      req.user.role
+    );
+
+    if (!accessCheck.permitted) {
+      return res.status(403).json({
+        error: accessCheck.reason || 'Access denied: You do not have permission for this SAP server.'
+      });
+    }
+
+    const modules = await supabaseService.getServerModules(id);
+    return res.status(200).json({
+      success: true,
+      serverId: id,
+      modules
+    });
+  } catch (err) {
+    console.error('Error fetching server modules:', err.message);
+    return res.status(500).json({ error: 'Failed to retrieve server modules' });
+  }
+});
 
 // Multi-system discovery endpoint
 app.get('/api/systems', (req, res) => {

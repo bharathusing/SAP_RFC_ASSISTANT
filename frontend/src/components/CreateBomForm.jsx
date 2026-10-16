@@ -171,7 +171,7 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {}, 
   };
 
   return (
-    <div className="sap-structured-form-card" style={{ maxWidth: 680, width: '100%', margin: '0 auto', ...style }}>
+    <div className="sap-structured-form-card" style={{ maxWidth: 760, width: '100%', margin: '0 auto', ...style }}>
       {!hideHeader && (
         <div className="sap-form-header">
           <div className="sap-form-header-title">
@@ -298,7 +298,7 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {}, 
                   </>
                 ) : isValidated ? (
                   <>
-                    <CheckCircle2 size={14} style={{ color: '#16a34a' }} />
+                    <CheckCircle2 size={14} style={{ color: 'var(--sap-success)' }} />
                     <span>BOM Validated ✓</span>
                   </>
                 ) : (
@@ -313,7 +313,7 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {}, 
             {/* Validation Status / Result Card */}
             {isValidating && (
               <div className="sap-source-val-card sap-val-loading">
-                <Loader2 size={15} className="sap-spin-icon" style={{ color: '#0070f2' }} />
+                <Loader2 size={15} className="sap-spin-icon" style={{ color: 'var(--sap-primary)' }} />
                 <span>Checking SAP CS03 transaction for reference BOM...</span>
               </div>
             )}
@@ -323,12 +323,12 @@ export default function CreateBomForm({ onSubmit, onCancel, initialValues = {}, 
                 <div className="sap-val-card-header">
                   {validationResult.success ? (
                     <>
-                      <CheckCircle2 size={15} style={{ color: '#16a34a', flexShrink: 0 }} />
+                      <CheckCircle2 size={15} style={{ color: 'var(--sap-success)', flexShrink: 0 }} />
                       <span className="sap-val-card-title">Source BOM Validated</span>
                     </>
                   ) : (
                     <>
-                      <XCircle size={15} style={{ color: '#dc2626', flexShrink: 0 }} />
+                      <XCircle size={15} style={{ color: 'var(--sap-error)', flexShrink: 0 }} />
                       <span className="sap-val-card-title">
                         Validation Failed {validationResult.errorCode ? `(${validationResult.errorCode})` : ''}
                       </span>

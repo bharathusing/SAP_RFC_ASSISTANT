@@ -9,7 +9,11 @@ let baseUrl;
 function makeRequest(method, path, body = null, headers = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, baseUrl);
-    const reqHeaders = { ...headers };
+    const reqHeaders = {
+      'Authorization': 'Bearer admin-test-token',
+      'x-server-id': '10000000-0000-0000-0000-000000000001',
+      ...headers
+    };
 
     if (body) {
       reqHeaders['Content-Type'] = 'application/json';

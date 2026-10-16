@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import {
   FileSpreadsheet,
@@ -16,6 +16,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { batchValidateBoms, batchCopyBoms, downloadBomTemplate } from '../services/api';
+import activityTracker from '../services/activityTracker';
 
 /**
  * Normalizes headers from Excel spreadsheet into recognized internal keys.
@@ -89,6 +90,13 @@ export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome 
   const [activeStep, setActiveStep] = useState(1); // 1: Upload, 2: Validate, 3: Execute/Results
 
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    activityTracker.setOperation('bulk_bom', isValidating || isExecuting);
+    return () => {
+      activityTracker.setOperation('bulk_bom', false);
+    };
+  }, [isValidating, isExecuting]);
 
   const resetAll = () => {
     setFile(null);
@@ -440,7 +448,7 @@ export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome 
                   }}
                 />
                 <div className="dropzone-icon">
-                  <Upload size={22} color="#0070f2" />
+                  <Upload size={22} color="var(--sap-primary)" />
                 </div>
                 <h4>Drag & drop Excel or CSV file here</h4>
                 <p>Supports .xlsx, .xls, and .csv with Source & Target BOM columns</p>
@@ -492,7 +500,7 @@ export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome 
               {/* File Info Bar */}
               <div className="sap-bulk-file-info-bar">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <FileCheck size={16} color="#107e3e" />
+                  <FileCheck size={16} color="var(--sap-success)" />
                   <span style={{ fontWeight: 600, color: 'var(--sap-text)', fontSize: '12px' }}>{file?.name}</span>
                   <span className="sap-badge-count">{parsedRows.length} rows</span>
                 </div>
@@ -534,7 +542,7 @@ export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome 
                     <span>{errorCount} Errors</span>
                   </div>
                   <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <label style={{ fontSize: '11px', color: '#166534', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', background: '#dcfce7', padding: '2px 6px', borderRadius: 4 }}>
+                    <label style={{ fontSize: '11px', color: 'var(--sap-success-text)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', background: 'var(--sap-success-bg)', border: '1px solid var(--sap-success-border)', padding: '2px 6px', borderRadius: 'var(--radius-sm)' }}>
                       <input
                         type="checkbox"
                         checked={copyHierarchy}
@@ -557,7 +565,7 @@ export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome 
               )}
 
               {/* Grid Table */}
-              <div className="sap-bulk-grid-container">
+              <div className="sap-bulk-grid-container" tabIndex={0} role="region" aria-label="Bulk BOM Items Table">
                 <table className="sap-bulk-table">
                   <thead>
                     <tr>
@@ -587,14 +595,14 @@ export default function BulkBomView({ systemKey = 'DEV', onBack, onNavigateHome 
                           <td>
                             <div className="bom-identity-cell">
                               <span className="mat-pill">{row.targetMaterial}</span>
-                              <span className="sub-detail">Plant: <strong>{row.targetPlant}</strong> | Use: {row.targetUsage} | Alt: <strong style={{ color: '#0070f2' }}>{row.targetAltBom}</strong></span>
+                              <span className="sub-detail">Plant: <strong>{row.targetPlant}</strong> | Use: {row.targetUsage} | Alt: <strong style={{ color: 'var(--sap-primary)' }}>{row.targetAltBom}</strong></span>
                             </div>
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             {row.componentCount !== undefined && row.componentCount > 0 ? (
                               <span className="comp-count-badge">{row.componentCount}</span>
                             ) : (
-                              <span style={{ color: '#94a3b8' }}>-</span>
+                              <span style={{ color: 'var(--sap-text-subtle)' }}>-</span>
                             )}
                           </td>
                           <td>

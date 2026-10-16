@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -13,9 +13,27 @@ import {
   GitBranch,
   RefreshCw,
   Clock,
-  ChevronRight
+  ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { readBom, explodeBomHierarchy } from '../services/api';
+import activityTracker from '../services/activityTracker';
+
+/**
+ * Trims leading zeros only on purely numeric material numbers.
+ * Alphanumeric ones remain unchanged.
+ */
+export function formatMaterialNumber(mat) {
+  if (!mat) return '';
+  const s = String(mat).trim();
+  if (/^\d+$/.test(s)) {
+    const trimmed = s.replace(/^0+/, '');
+    return trimmed.length > 0 ? trimmed : '0';
+  }
+  return s;
+}
 
 export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateHome }) {
   const [searchParams, setSearchParams] = useState({
@@ -30,6 +48,14 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
   const [errorMessage, setErrorMessage] = useState('');
   const [filterText, setFilterText] = useState('');
   const [viewMode, setViewMode] = useState('items'); // 'items' | 'hierarchy'
+  const [sortConfig, setSortConfig] = useState({ key: '', direction: 'asc' });
+
+  useEffect(() => {
+    activityTracker.setOperation('bom_explorer', isLoading);
+    return () => {
+      activityTracker.setOperation('bom_explorer', false);
+    };
+  }, [isLoading]);
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
@@ -74,14 +100,100 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
     }
   };
 
-  const components = bomData?.components || bomData?.items || [];
-  const filteredComponents = components.filter((item) => {
-    if (!filterText) return true;
-    const term = filterText.toLowerCase();
-    const compMat = (item.component || item.material || item.IDNRK || '').toLowerCase();
-    const compDesc = (item.description || item.OJTXP || item.MAKTX || '').toLowerCase();
-    return compMat.includes(term) || compDesc.includes(term);
-  });
+  const components = useMemo(() => {
+    return bomData?.components || bomData?.items || [];
+  }, [bomData]);
+
+  const isMultiLevel = useMemo(() => {
+    return viewMode === 'hierarchy' || components.some((c) => c.level && c.level > 1);
+  }, [viewMode, components]);
+
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const renderSortIcon = (key) => {
+    if (sortConfig.key !== key) {
+      return <ArrowUpDown size={11} style={{ opacity: 0.35, marginLeft: 4 }} />;
+    }
+    return sortConfig.direction === 'asc' ? (
+      <ArrowUp size={11} color="var(--sap-primary)" style={{ marginLeft: 4 }} />
+    ) : (
+      <ArrowDown size={11} color="var(--sap-primary)" style={{ marginLeft: 4 }} />
+    );
+  };
+
+  const filteredComponents = useMemo(() => {
+    let list = components;
+    if (filterText) {
+      const term = filterText.toLowerCase();
+      list = list.filter((item) => {
+        const mat = (item.component || item.material || item.IDNRK || '').toLowerCase();
+        const rawMat = (item.rawComponent || '').toLowerCase();
+        const desc = (item.description || item.OJTXP || item.MAKTX || '').toLowerCase();
+        const itemNo = String(item.itemNo || item.item || item.POSNR || '').toLowerCase();
+        const cat = (item.itemCategory || item.POSTP || '').toLowerCase();
+        const unit = (item.unit || item.MEINS || '').toLowerCase();
+        const qty = String(item.quantity !== undefined && item.quantity !== null ? item.quantity : '').toLowerCase();
+        const validFrom = String(item.validFrom || item.DATUV || '').toLowerCase();
+        const level = String(item.level || '').toLowerCase();
+        return (
+          mat.includes(term) ||
+          rawMat.includes(term) ||
+          desc.includes(term) ||
+          itemNo.includes(term) ||
+          cat.includes(term) ||
+          unit.includes(term) ||
+          qty.includes(term) ||
+          validFrom.includes(term) ||
+          level.includes(term)
+        );
+      });
+    }
+
+    if (sortConfig.key) {
+      list = [...list].sort((a, b) => {
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+
+        if (sortConfig.key === 'component') {
+          aVal = formatMaterialNumber(a.component || a.material || a.IDNRK || '');
+          bVal = formatMaterialNumber(b.component || b.material || b.IDNRK || '');
+        } else if (sortConfig.key === 'description') {
+          aVal = a.description || a.OJTXP || a.MAKTX || '';
+          bVal = b.description || b.OJTXP || b.MAKTX || '';
+        } else if (sortConfig.key === 'quantity') {
+          aVal = Number(a.quantity || a.MENGE || 0);
+          bVal = Number(b.quantity || b.MENGE || 0);
+        } else if (sortConfig.key === 'itemNo') {
+          aVal = Number(a.itemNo || a.item || a.POSNR || 0);
+          bVal = Number(b.itemNo || b.item || b.POSNR || 0);
+        } else if (sortConfig.key === 'level') {
+          aVal = Number(a.level || 1);
+          bVal = Number(b.level || 1);
+        } else if (sortConfig.key === 'validFrom') {
+          aVal = String(a.validFrom || a.DATUV || '');
+          bVal = String(b.validFrom || b.DATUV || '');
+        } else if (sortConfig.key === 'hasSubBom') {
+          aVal = a.hasSubBom ? 1 : 0;
+          bVal = b.hasSubBom ? 1 : 0;
+        }
+
+        if (typeof aVal === 'string') {
+          const comp = aVal.localeCompare(String(bVal));
+          return sortConfig.direction === 'asc' ? comp : -comp;
+        } else {
+          const comp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+          return sortConfig.direction === 'asc' ? comp : -comp;
+        }
+      });
+    }
+
+    return list;
+  }, [components, filterText, sortConfig]);
 
   return (
     <div className="fiori-app-view-root">
@@ -112,7 +224,7 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
           <h1 className="fiori-ph-title">BOM Hierarchy Explorer (CS03)</h1>
         </div>
         <p className="fiori-ph-subtitle">
-          Inspect live Material BOM headers and component structures directly from SAP tables (MAST / STAS / STPO) via CSAP_MAT_BOM_READ.
+          View a material's BOM components and structure.
         </p>
       </div>
 
@@ -131,7 +243,7 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
             <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: '14px 16px', gap: '10px 14px' }}>
             <div className="sap-form-group">
               <label className="sap-form-label" style={{ fontSize: '11px', marginBottom: 2 }}>
-                Material Number <span className="sap-required-star" style={{ color: '#ef4444' }}>*</span>
+                Material Number <span className="sap-required-star" style={{ color: 'var(--sap-error)' }}>*</span>
               </label>
               <div className="sap-form-input-wrapper">
                 <Layers size={13} className="input-icon" />
@@ -147,7 +259,7 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
 
             <div className="sap-form-group">
               <label className="sap-form-label" style={{ fontSize: '11px', marginBottom: 2 }}>
-                Plant Code <span className="sap-required-star" style={{ color: '#ef4444' }}>*</span>
+                Plant Code <span className="sap-required-star" style={{ color: 'var(--sap-error)' }}>*</span>
               </label>
               <div className="sap-form-input-wrapper">
                 <Factory size={13} className="input-icon" />
@@ -194,7 +306,7 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderTop: '1px solid var(--sap-border-subtle)', background: '#fafbfc' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderTop: '1px solid var(--sap-border-subtle)', background: 'var(--sap-surface-subtle)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <button
                 type="button"
@@ -239,7 +351,7 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
 
       {/* BOM Data View */}
       {bomData && (
-        <div className="sap-bom-explorer-results" style={{ width: '100%', maxWidth: 1100, margin: '0 auto' }}>
+        <div className="sap-bom-explorer-results" style={{ width: '100%', maxWidth: 1100, margin: '0 auto 20px', paddingBottom: 0 }}>
           {/* Header Metadata Card */}
           <div className="sap-result-meta-grid" style={{ marginBottom: 16 }}>
             <div className="sap-result-meta-item">
@@ -260,17 +372,17 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
             </div>
             <div className="sap-result-meta-item">
               <span className="sap-result-meta-label">Total Components</span>
-              <strong className="sap-result-meta-val" style={{ color: '#0070f2' }}>
+              <strong className="sap-result-meta-val" style={{ color: 'var(--sap-primary)' }}>
                 {components.length}
               </strong>
             </div>
           </div>
 
           {/* Components Table with In-Table Filter */}
-          <div className="sap-table-card">
+          <div className="sap-table-card" style={{ height: 'auto', flex: 'none', marginBottom: 20 }}>
             <div className="sap-table-toolbar" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--sap-border-subtle)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Layers size={16} color="#0070f2" />
+                <Layers size={16} color="var(--sap-primary)" />
                 <h4 style={{ fontSize: '14px', fontWeight: 600 }}>Components List</h4>
                 <span className="sap-badge sap-badge-neutral">{filteredComponents.length} items</span>
               </div>
@@ -286,32 +398,88 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
               </div>
             </div>
 
-            <div className="sap-table-container">
+            <div className="sap-table-container" tabIndex={0} role="region" aria-label="BOM Components Table">
               {filteredComponents.length > 0 ? (
                 <table className="sap-table">
                   <thead>
                     <tr>
-                      <th>Item</th>
-                      <th>Component Material</th>
-                      <th>Description</th>
-                      <th>Quantity</th>
-                      <th>Unit</th>
-                      <th>Category</th>
-                      <th>Valid From</th>
-                      <th>Sub-BOM</th>
+                      {isMultiLevel && (
+                        <th onClick={() => handleSort('level')} style={{ cursor: 'pointer', userSelect: 'none', width: 68 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            Level {renderSortIcon('level')}
+                          </span>
+                        </th>
+                      )}
+                      <th onClick={() => handleSort('itemNo')} style={{ cursor: 'pointer', userSelect: 'none', width: 75 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Item {renderSortIcon('itemNo')}
+                        </span>
+                      </th>
+                      <th onClick={() => handleSort('component')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Component Material {renderSortIcon('component')}
+                        </span>
+                      </th>
+                      <th onClick={() => handleSort('description')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Description {renderSortIcon('description')}
+                        </span>
+                      </th>
+                      <th onClick={() => handleSort('quantity')} style={{ cursor: 'pointer', userSelect: 'none', width: 95 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Quantity {renderSortIcon('quantity')}
+                        </span>
+                      </th>
+                      <th onClick={() => handleSort('unit')} style={{ cursor: 'pointer', userSelect: 'none', width: 75 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Unit {renderSortIcon('unit')}
+                        </span>
+                      </th>
+                      <th onClick={() => handleSort('itemCategory')} style={{ cursor: 'pointer', userSelect: 'none', width: 85 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Category {renderSortIcon('itemCategory')}
+                        </span>
+                      </th>
+                      <th onClick={() => handleSort('validFrom')} style={{ cursor: 'pointer', userSelect: 'none', width: 115 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Valid From {renderSortIcon('validFrom')}
+                        </span>
+                      </th>
+                      <th onClick={() => handleSort('hasSubBom')} style={{ cursor: 'pointer', userSelect: 'none', width: 95 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Sub-BOM {renderSortIcon('hasSubBom')}
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredComponents.map((item, idx) => {
                       const hasSubBom = Boolean(item.hasSubBom || item.subBomExists || item.isSubAssembly);
+                      const displayMat = formatMaterialNumber(item.component || item.IDNRK || item.material || '-');
+                      const indentLevel = item.level && item.level > 1 ? item.level - 1 : 0;
+
                       return (
                         <tr key={idx}>
-                          <td>{item.itemNo || item.POSNR || (idx + 1) * 10}</td>
+                          {isMultiLevel && (
+                            <td>
+                              <span className="sap-badge sap-badge-neutral" style={{ fontSize: '11px', fontWeight: 600 }}>
+                                L{item.level || 1}
+                              </span>
+                            </td>
+                          )}
+                          <td>{item.itemNo || item.item || item.POSNR || (idx + 1) * 10}</td>
                           <td>
-                            <strong>{item.component || item.IDNRK || item.material || '-'}</strong>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', paddingLeft: indentLevel * 20 }}>
+                              {indentLevel > 0 && (
+                                <span style={{ color: 'var(--sap-text-muted)', marginRight: 6, fontFamily: 'monospace', fontWeight: 600 }}>
+                                  └──
+                                </span>
+                              )}
+                              <strong>{displayMat}</strong>
+                            </div>
                           </td>
-                          <td>{item.description || item.OJTXP || item.MAKTX || '-'}</td>
-                          <td>{item.quantity || item.MENGE || '-'}</td>
+                          <td>{item.description || '-'}</td>
+                          <td>{item.quantity !== undefined && item.quantity !== null && item.quantity !== '' ? item.quantity : '-'}</td>
                           <td>{item.unit || item.MEINS || '-'}</td>
                           <td>{item.itemCategory || item.POSTP || 'L'}</td>
                           <td>{item.validFrom || item.DATUV || '-'}</td>
@@ -334,6 +502,30 @@ export default function BomExplorerView({ systemKey = 'DEV', onBack, onNavigateH
                 <div style={{ padding: 32, textAlign: 'center', color: 'var(--sap-text-muted)' }}>
                   <p>No components match your search filter.</p>
                 </div>
+              )}
+            </div>
+
+            {/* Table Footer Bar - Closes table card cleanly at bottom */}
+            <div className="sap-table-footer-bar">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>
+                  Showing <strong>{filteredComponents.length}</strong> of <strong>{components.length}</strong> components
+                </span>
+                {filterText && (
+                  <span style={{ fontSize: '11px', color: 'var(--sap-primary)', fontWeight: 600 }}>
+                    (Filtered)
+                  </span>
+                )}
+              </div>
+              {filterText && (
+                <button
+                  type="button"
+                  className="sap-btn sap-btn-ghost"
+                  onClick={() => setFilterText('')}
+                  style={{ height: 24, fontSize: '11px', padding: '0 8px' }}
+                >
+                  Clear filter
+                </button>
               )}
             </div>
           </div>

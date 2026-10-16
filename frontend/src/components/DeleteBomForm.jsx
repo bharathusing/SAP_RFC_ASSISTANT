@@ -88,7 +88,7 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {}, 
         <div className="sap-form-grid" style={{ gridTemplateColumns: '1fr 1fr', padding: hideHeader ? '4px 2px 10px' : '12px 14px', gap: '10px 14px' }}>
           <div className="sap-form-group">
             <label htmlFor="delMaterial" style={{ fontSize: '11px', marginBottom: 2 }}>
-              Material Number <span className="required-star" style={{ color: '#ef4444' }}>*</span>
+              Material Number <span className="required-star" style={{ color: 'var(--sap-error)' }}>*</span>
             </label>
             <div className="sap-form-input-wrapper">
               <Layers size={13} className="input-icon" />
@@ -106,7 +106,7 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {}, 
 
           <div className="sap-form-group">
             <label htmlFor="delPlant" style={{ fontSize: '11px', marginBottom: 2 }}>
-              Plant Code <span className="required-star" style={{ color: '#ef4444' }}>*</span>
+              Plant Code <span className="required-star" style={{ color: 'var(--sap-error)' }}>*</span>
             </label>
             <div className="sap-form-input-wrapper">
               <Factory size={13} className="input-icon" />
@@ -123,7 +123,7 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {}, 
 
           <div className="sap-form-group">
             <label htmlFor="delAlternativeBom" style={{ fontSize: '11px', marginBottom: 2 }}>
-              Alternative BOM <span className="required-star" style={{ color: '#ef4444' }}>*</span>
+              Alternative BOM <span className="required-star" style={{ color: 'var(--sap-error)' }}>*</span>
             </label>
             <div className="sap-form-input-wrapper">
               <Hash size={13} className="input-icon" />
@@ -140,7 +140,7 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {}, 
 
           <div className="sap-form-group">
             <label htmlFor="delBomUsage" style={{ fontSize: '11px', marginBottom: 2 }}>
-              BOM Usage <span className="required-star" style={{ color: '#ef4444' }}>*</span>
+              BOM Usage <span className="required-star" style={{ color: 'var(--sap-error)' }}>*</span>
             </label>
             <div className="sap-form-input-wrapper">
               <Hash size={13} className="input-icon" />
@@ -156,7 +156,7 @@ export default function DeleteBomForm({ onSubmit, onCancel, initialValues = {}, 
           </div>
         </div>
 
-        <div className="sap-form-actions" style={{ padding: '8px 4px 6px', borderTop: '1px solid #fee2e2' }}>
+        <div className="sap-form-actions" style={{ padding: '8px 4px 6px', borderTop: '1px solid var(--sap-error-border)' }}>
           <button
             type="button"
             className="sap-btn sap-btn-secondary"

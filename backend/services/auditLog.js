@@ -55,6 +55,7 @@ class AuditLogger {
    * @returns {object} The logged entry
    */
   logAction({
+    user = null,
     sapUsername = 'SYSTEM',
     entityKey = 'businessPartner',
     actionType,
@@ -71,6 +72,7 @@ class AuditLogger {
     ticketId = null,
     reason = null
   }) {
+    const resolvedUser = user || sapUsername || 'SYSTEM';
     const resolvedId = String(recordId || businessPartnerId || 'UNKNOWN');
     const isOpsAction = ['backgroundJob', 'idoc', 'interfaceMonitor'].includes(entityKey) ||
       ['retry', 'reprocess', 'retrigger'].includes(actionType);
@@ -88,8 +90,8 @@ class AuditLogger {
 
     const logEntry = {
       logId: `audit_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
-      sapUsername,
-      user: sapUsername,
+      sapUsername: resolvedUser,
+      user: resolvedUser,
       system,
       entityKey,
       actionType,
